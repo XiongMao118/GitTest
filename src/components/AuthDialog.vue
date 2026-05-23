@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { useAuthStore } from '@/store/auth'
+import { ref, watch, computed } from 'vue'
+import { useUserStore } from '@/store/user'
 
 interface Props {
   visible: boolean
@@ -12,58 +12,62 @@ const emit = defineEmits<{
   (e: 'success'): void
 }>()
 
-const authStore = useAuthStore()
+const userStore = useUserStore()
+const isSignUp = ref(false)
+const account = ref('')
 const password = ref('')
+const username = ref('')
 const showPassword = ref(false)
-const error = ref('')
-const isLoading = ref(false)
+
+const isLoading = computed(() => userStore.isLoading.value)
+const error = computed(() => userStore.error.value)
 
 watch(() => props.visible, (newVal) => {
-  if (newVal) {
-    password.value = ''
-    error.value = ''
+  if (!newVal) {
+    resetForm()
   }
 })
 
+const resetForm = () => {
+  account.value = ''
+  password.value = ''
+  username.value = ''
+  showPassword.value = false
+  isSignUp.value = false
+  userStore.resetError()
+}
+
 const handleSubmit = async () => {
-  if (!password.value) {
-    error.value = '请输入密码'
+  if (!account.value || !password.value) {
+    userStore.error.value = '请填写所有必填字段'
     return
   }
-
-  // Check if locked out
-  const remainingTime = authStore.getRemainingLockoutTime()
-  if (remainingTime > 0) {
-    error.value = `登录已锁定，请在 ${remainingTime} 分钟后重试`
-    return
-  }
-
-  isLoading.value = true
-  error.value = ''
-
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 500))
-
-  const success = authStore.login(password.value)
   
-  isLoading.value = false
-
+  if (isSignUp.value && !username.value) {
+    userStore.error.value = '请填写用户名'
+    return
+  }
+  
+  let success: boolean
+  if (isSignUp.value) {
+    success = await userStore.signUp(account.value, password.value, username.value)
+  } else {
+    success = await userStore.signIn(account.value, password.value)
+  }
+  
   if (success) {
     emit('success')
     emit('close')
-  } else {
-    const remainingAttempts = 5 - authStore.loginAttempts.value
-    if (remainingAttempts > 0) {
-      error.value = `密码错误，剩余 ${remainingAttempts} 次尝试机会`
-    } else {
-      error.value = '登录失败次数过多，请稍后再试'
-    }
   }
 }
 
+const toggleMode = () => {
+  isSignUp.value = !isSignUp.value
+  userStore.resetError()
+}
+
 const handleClose = () => {
-  password.value = ''
-  error.value = ''
+  resetForm()
   emit('close')
 }
 </script>
@@ -76,33 +80,53 @@ const handleClose = () => {
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
         @click.self="handleClose"
       >
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden transform transition-all">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
           <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-6">
-            <h2 class="text-2xl font-bold text-white flex items-center gap-3">
-              <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-              </svg>
-              管理员登录
+            <h2 class="text-2xl font-bold text-white">
+              {{ isSignUp ? '用户注册' : '用户登录' }}
             </h2>
-            <p class="text-blue-100 mt-2">请输入管理员密码以编辑个人信息</p>
+            <p class="text-blue-100 mt-2">
+              {{ isSignUp ? '创建新账户开始使用' : '登录到你的账户' }}
+            </p>
           </div>
 
-          <form @submit.prevent="handleSubmit" class="p-8 space-y-6">
+          <form @submit.prevent="handleSubmit" class="p-8 space-y-4">
+            <div v-if="isSignUp" class="space-y-2">
+              <label class="block text-sm font-medium text-slate-700">用户名</label>
+              <input
+                v-model="username"
+                type="text"
+                class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="请输入用户名"
+                :disabled="isLoading"
+              />
+            </div>
+
+            <div class="space-y-2">
+              <label class="block text-sm font-medium text-slate-700">{{ isSignUp ? '邮箱' : '邮箱/用户名' }}</label>
+              <input
+                v-model="account"
+                type="text"
+                class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                :placeholder="isSignUp ? '请输入邮箱' : '请输入邮箱或用户名'"
+                :disabled="isLoading"
+              />
+            </div>
+
             <div class="space-y-2">
               <label class="block text-sm font-medium text-slate-700">密码</label>
               <div class="relative">
                 <input
                   v-model="password"
                   :type="showPassword ? 'text' : 'password'"
-                  class="w-full px-4 py-3 pr-12 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  placeholder="请输入管理员密码"
+                  class="w-full px-4 py-3 pr-12 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="请输入密码"
                   :disabled="isLoading"
-                  @keyup.enter="handleSubmit"
                 />
                 <button
                   type="button"
                   @click="showPassword = !showPassword"
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                 >
                   <svg v-if="!showPassword" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -128,24 +152,28 @@ const handleClose = () => {
               <button
                 type="button"
                 @click="handleClose"
-                class="flex-1 px-6 py-3 border border-slate-300 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition-colors"
+                class="flex-1 px-6 py-3 border border-slate-300 text-slate-700 font-medium rounded-xl hover:bg-slate-50"
                 :disabled="isLoading"
               >
                 取消
               </button>
               <button
                 type="submit"
-                class="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                class="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                 :disabled="isLoading"
               >
-                <span v-if="isLoading" class="flex items-center justify-center gap-2">
-                  <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  验证中...
-                </span>
-                <span v-else>登录</span>
+                <span v-if="isLoading">处理中...</span>
+                <span v-else>{{ isSignUp ? '注册' : '登录' }}</span>
+              </button>
+            </div>
+
+            <div class="text-center">
+              <button
+                type="button"
+                @click="toggleMode"
+                class="text-blue-600 hover:text-blue-700 text-sm"
+              >
+                {{ isSignUp ? '已有账户？点击登录' : '没有账户？点击注册' }}
               </button>
             </div>
           </form>

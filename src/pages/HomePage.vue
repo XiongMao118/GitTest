@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
+import AuthDialog from '@/components/AuthDialog.vue'
 import LoginDialog from '@/components/LoginDialog.vue'
+import { useUserStore } from '@/store/user'
 import { useAuthStore } from '@/store/auth'
 
 interface Skill {
@@ -34,6 +36,10 @@ interface PersonalInfo {
 }
 
 const authStore = useAuthStore()
+const userStore = useUserStore()
+const showAuthDialog = ref(false)
+
+const currentUser = computed(() => userStore.currentUser.value)
 
 const menuItems = ref([
   { id: 'home', icon: '🏠', label: '首页', description: '欢迎来到我的个人主页' },
@@ -48,6 +54,7 @@ const showStatusBar = ref(false)
 const statusBarPage = ref('home')
 const showLoginDialog = ref(false)
 const isEditMode = ref(false)
+const userAvatar = ref('')
 
 // Load saved data from localStorage or use defaults
 const defaultPersonalInfo: PersonalInfo = {
@@ -89,17 +96,23 @@ const loadPersonalInfo = (): PersonalInfo => {
 }
 
 const personalInfo = reactive<PersonalInfo>(loadPersonalInfo())
-const editedInfo = reactive<PersonalInfo>(JSON.parse(JSON.stringify(defaultPersonalInfo)))
+const editedInfo = reactive<PersonalInfo>(JSON.parse(JSON.stringify(loadPersonalInfo())))
 
 // Edit mode handlers
 const startEdit = () => {
   Object.assign(editedInfo, JSON.parse(JSON.stringify(personalInfo)))
+  userAvatar.value = currentUser.value?.avatar_url || ''
   isEditMode.value = true
 }
 
-const saveEdit = () => {
+const saveEdit = async () => {
   Object.assign(personalInfo, JSON.parse(JSON.stringify(editedInfo)))
   localStorage.setItem('personal_info', JSON.stringify(personalInfo))
+  
+  if (userAvatar.value !== currentUser.value?.avatar_url) {
+    await userStore.updateProfile({ avatar_url: userAvatar.value })
+  }
+  
   isEditMode.value = false
 }
 
@@ -107,9 +120,56 @@ const cancelEdit = () => {
   isEditMode.value = false
 }
 
-const handleLogout = () => {
+const handleUserAvatarUpload = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  
+  if (file) {
+    if (file.size > 2 * 1024 * 1024) {
+      alert('图片大小不能超过 2MB')
+      return
+    }
+    
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      userAvatar.value = e.target?.result as string
+    }
+    reader.readAsDataURL(file)
+  }
+  
+  target.value = ''
+}
+
+const handleAvatarUpload = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  
+  if (file) {
+    if (file.size > 2 * 1024 * 1024) {
+      alert('图片大小不能超过 2MB')
+      return
+    }
+    
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      editedInfo.avatar = e.target?.result as string
+    }
+    reader.readAsDataURL(file)
+  }
+  
+  target.value = ''
+}
+
+const handleLogout = async () => {
+  await userStore.signOut()
   authStore.logout()
   isEditMode.value = false
+  showAuthDialog.value = false
+  showLoginDialog.value = false
+}
+
+const handleAuthSuccess = () => {
+  showAuthDialog.value = false
 }
 
 const setActiveMenu = (id: string) => {
@@ -122,14 +182,15 @@ const setStatusBarPage = (id: string) => {
   activeMenu.value = id
 }
 
-onMounted(() => {
+onMounted(async () => {
   authStore.checkAuth()
+  await userStore.checkSession()
 })
 
 const contentData = ref({
   home: {
     title: '欢迎来到我的个人主页',
-    content: (info: PersonalInfo) => `
+    content: () => `
       <p>感谢您访问我的个人主页！</p>
       <p>这里展示了我的技能、项目和联系方式。</p>
       <p>使用左侧菜单导航到不同页面，或悬停在顶部状态栏快速切换。</p>
@@ -312,6 +373,39 @@ const removeProject = (index: number) => {
                 {{ item.icon }} {{ item.label }}
               </button>
             </div>
+            <!-- User Auth in Status Bar -->
+            <div class="flex items-center gap-3">
+              <template v-if="currentUser">
+                <div class="flex items-center gap-2 bg-blue-50 px-3 py-1.5 rounded-lg">
+                  <div class="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs overflow-hidden">
+                    <img v-if="currentUser.avatar_url" :src="currentUser.avatar_url" class="w-full h-full object-cover" />
+                    <span v-else>👤</span>
+                  </div>
+                  <span class="text-sm font-medium text-slate-700 max-w-24 truncate">{{ currentUser.username || currentUser.email }}</span>
+                  <button
+                    v-if="!isEditMode"
+                    @click="startEdit"
+                    class="px-2 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-medium rounded hover:from-blue-700 hover:to-indigo-700 transition-all"
+                  >
+                    {{ currentUser.is_admin ? '编辑' : '修改头像' }}
+                  </button>
+                  <button
+                    @click="handleLogout"
+                    class="px-2 py-1 text-slate-500 hover:text-red-600 hover:bg-red-50 text-xs rounded transition-all"
+                    title="退出登录"
+                  >
+                    退出
+                  </button>
+                </div>
+              </template>
+              <button
+                v-else
+                @click="showAuthDialog = true"
+                class="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-medium rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg shadow-blue-500/30"
+              >
+                登录/注册
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -323,46 +417,6 @@ const removeProject = (index: number) => {
       class="fixed top-0 left-0 right-0 h-10 z-40 cursor-pointer"
       @mouseenter="showStatusBar = true"
     ></div>
-
-    <!-- Top Right - User Info -->
-    <div class="fixed top-0 right-0 z-40 p-4" :class="isEditMode ? 'pt-14' : 'pt-10'">
-      <div class="flex items-center gap-3">
-        <!-- Admin Button or Avatar -->
-        <template v-if="authStore.isAuthenticated && !isEditMode">
-          <button
-            @click="startEdit"
-            class="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg shadow-blue-500/30 flex items-center gap-2"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-            </svg>
-            编辑
-          </button>
-          <button
-            @click="handleLogout"
-            class="px-4 py-2 bg-red-500 text-white font-medium rounded-lg hover:bg-red-600 transition-all shadow-lg flex items-center gap-2"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-            </svg>
-            登出
-          </button>
-        </template>
-        <button
-          v-if="!authStore.isAuthenticated"
-          @click="showLoginDialog = true"
-          class="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg shadow-blue-500/30 flex items-center gap-2"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-          </svg>
-          管理员登录
-        </button>
-        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xl shadow-lg">
-          {{ personalInfo.avatar }}
-        </div>
-      </div>
-    </div>
 
     <!-- Main Content -->
     <div class="pt-10 flex min-h-screen">
@@ -405,186 +459,274 @@ const removeProject = (index: number) => {
       <main class="flex-1 p-8" :class="isEditMode ? 'pt-20' : ''">
         <div class="max-w-4xl mx-auto">
           <!-- Edit Mode Forms -->
-          <div v-if="isEditMode" class="bg-white rounded-2xl shadow-xl p-8 space-y-6">
-            <h2 class="text-2xl font-bold text-slate-800 border-b pb-4">基本信息编辑</h2>
-            
-            <!-- Avatar & Basic Info -->
-            <div class="grid grid-cols-2 gap-6">
-              <div>
-                <label class="block text-sm font-medium text-slate-700 mb-2">头像 (emoji)</label>
-                <input
-                  v-model="editedInfo.avatar"
-                  class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-slate-700 mb-2">姓名</label>
-                <input
-                  v-model="editedInfo.name"
-                  class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-slate-700 mb-2">职位</label>
-                <input
-                  v-model="editedInfo.title"
-                  class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-slate-700 mb-2">个人简介</label>
-              <textarea
-                v-model="editedInfo.bio"
-                rows="3"
-                class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              ></textarea>
-            </div>
-
-            <!-- Contact Info -->
-            <div class="border-t pt-6">
-              <h3 class="text-xl font-bold text-slate-800 mb-4">联系方式</h3>
-              <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-medium text-slate-700 mb-2">邮箱</label>
-                  <input
-                    v-model="editedInfo.contact.email"
-                    class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+          <div v-if="isEditMode" class="bg-white rounded-2xl shadow-xl p-8 space-y-6 animate-in fade-in duration-300">
+            <!-- User Avatar Section (All users) -->
+            <div class="bg-blue-50 rounded-xl p-4 mb-6">
+              <h3 class="text-lg font-semibold text-slate-800 mb-3">我的头像</h3>
+              <div class="flex items-center gap-4">
+                <div class="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl overflow-hidden border-4 border-white shadow-lg">
+                  <img v-if="userAvatar" :src="userAvatar" class="w-full h-full object-cover" />
+                  <span v-else>👤</span>
                 </div>
-                <div>
-                  <label class="block text-sm font-medium text-slate-700 mb-2">电话</label>
-                  <input
-                    v-model="editedInfo.contact.phone"
-                    class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-slate-700 mb-2">地址</label>
-                  <input
-                    v-model="editedInfo.contact.address"
-                    class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-slate-700 mb-2">LinkedIn</label>
-                  <input
-                    v-model="editedInfo.contact.linkedin"
-                    class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-slate-700 mb-2">GitHub</label>
-                  <input
-                    v-model="editedInfo.contact.github"
-                    class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-slate-700 mb-2">B站</label>
-                  <input
-                    v-model="editedInfo.contact.bilibili"
-                    class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <!-- Skills -->
-            <div class="border-t pt-6">
-              <div class="flex items-center justify-between mb-4">
-                <h3 class="text-xl font-bold text-slate-800">技能列表</h3>
-                <button
-                  @click="addSkillCategory"
-                  class="px-3 py-1 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors"
-                >
-                  + 添加分类
-                </button>
-              </div>
-              <div class="space-y-4">
-                <div v-for="(skill, sIndex) in editedInfo.skills" :key="sIndex" class="bg-slate-50 rounded-lg p-4">
-                  <div class="flex items-center gap-2 mb-2">
+                <div class="flex-1">
+                  <div class="flex flex-col gap-2">
                     <input
-                      v-model="skill.category"
-                      class="flex-1 px-3 py-1 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
-                      placeholder="分类名称"
+                      v-model="userAvatar"
+                      class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="输入图片URL"
                     />
-                    <button
-                      @click="removeSkillCategory(sIndex)"
-                      class="px-2 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600"
-                    >
-                      删除
-                    </button>
-                  </div>
-                  <div class="flex flex-wrap gap-2">
-                    <span
-                      v-for="(item, iIndex) in skill.items"
-                      :key="iIndex"
-                      class="inline-flex items-center gap-1 px-3 py-1 bg-white border border-slate-300 rounded-full text-sm"
-                    >
-                      {{ item }}
-                      <button @click="removeSkillItem(sIndex, iIndex)" class="text-red-500 hover:text-red-700">×</button>
-                    </span>
-                    <button
-                      @click="addSkillItem(sIndex)"
-                      class="px-2 py-1 border border-dashed border-slate-300 rounded-full text-sm text-slate-500 hover:border-blue-500 hover:text-blue-500"
-                    >
-                      + 添加
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Projects -->
-            <div class="border-t pt-6">
-              <div class="flex items-center justify-between mb-4">
-                <h3 class="text-xl font-bold text-slate-800">项目列表</h3>
-                <button
-                  @click="addProject"
-                  class="px-3 py-1 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors"
-                >
-                  + 添加项目
-                </button>
-              </div>
-              <div class="space-y-4">
-                <div v-for="(project, pIndex) in editedInfo.projects" :key="pIndex" class="bg-slate-50 rounded-lg p-4">
-                  <div class="space-y-2">
-                    <input
-                      v-model="project.title"
-                      class="w-full px-3 py-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
-                      placeholder="项目标题"
-                    />
-                    <textarea
-                      v-model="project.description"
-                      rows="2"
-                      class="w-full px-3 py-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
-                      placeholder="项目描述"
-                    ></textarea>
                     <div class="flex items-center gap-2">
-                      <label class="text-sm text-slate-600">颜色:</label>
-                      <select
-                        v-model="project.color"
-                        class="px-3 py-1 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="blue">蓝色</option>
-                        <option value="green">绿色</option>
-                        <option value="purple">紫色</option>
-                        <option value="pink">粉色</option>
-                        <option value="yellow">黄色</option>
-                      </select>
+                      <label class="px-3 py-1.5 bg-white text-slate-700 text-sm rounded-lg cursor-pointer hover:bg-slate-100 transition-colors border border-slate-300">
+                        选择本地图片
+                        <input
+                          type="file"
+                          accept="image/*"
+                          class="hidden"
+                          @change="handleUserAvatarUpload"
+                        />
+                      </label>
                       <button
-                        @click="removeProject(pIndex)"
-                        class="ml-auto px-2 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600"
+                        v-if="userAvatar"
+                        @click="userAvatar = ''"
+                        class="text-xs text-red-500 hover:text-red-700"
                       >
-                        删除项目
+                        清除
                       </button>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
+            
+            <!-- Admin Only: Personal Info Section -->
+            <template v-if="currentUser?.is_admin">
+              <div class="border-t pt-6">
+                <h2 class="text-2xl font-bold text-slate-800 border-b pb-4">个人信息编辑（管理员）</h2>
+                
+                <!-- Avatar & Basic Info -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+                  <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">头像</label>
+                    <div class="flex flex-col gap-3">
+                      <input
+                        v-model="editedInfo.avatar"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="输入图片URL"
+                      />
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs text-slate-500">或</span>
+                        <label class="px-3 py-1.5 bg-slate-100 text-slate-700 text-sm rounded-lg cursor-pointer hover:bg-slate-200 transition-colors">
+                          选择本地图片
+                          <input
+                            type="file"
+                            accept="image/*"
+                            class="hidden"
+                            @change="handleAvatarUpload"
+                          />
+                        </label>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs text-slate-500">预览:</span>
+                        <div class="w-16 h-16 rounded-full bg-slate-100 overflow-hidden border-2 border-slate-200">
+                          <img v-if="editedInfo.avatar" :src="editedInfo.avatar" class="w-full h-full object-cover" />
+                          <span v-else class="flex items-center justify-center w-full h-full text-2xl">👤</span>
+                        </div>
+                        <button
+                          v-if="editedInfo.avatar"
+                          @click="editedInfo.avatar = ''"
+                          class="text-xs text-red-500 hover:text-red-700"
+                        >
+                          清除
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">姓名</label>
+                    <input
+                      v-model="editedInfo.name"
+                      class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">职位</label>
+                    <input
+                      v-model="editedInfo.title"
+                      class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 mb-2">个人简介</label>
+                  <textarea
+                    v-model="editedInfo.bio"
+                    rows="3"
+                    class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  ></textarea>
+                </div>
+
+                <!-- Contact Info -->
+                <div class="border-t pt-6">
+                  <h3 class="text-xl font-bold text-slate-800 mb-4">联系方式</h3>
+                  <div class="grid grid-cols-2 gap-4">
+                    <div>
+                      <label class="block text-sm font-medium text-slate-700 mb-2">邮箱</label>
+                      <input
+                        v-model="editedInfo.contact.email"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-slate-700 mb-2">电话</label>
+                      <input
+                        v-model="editedInfo.contact.phone"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-slate-700 mb-2">地址</label>
+                      <input
+                        v-model="editedInfo.contact.address"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-slate-700 mb-2">LinkedIn</label>
+                      <input
+                        v-model="editedInfo.contact.linkedin"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-slate-700 mb-2">GitHub</label>
+                      <input
+                        v-model="editedInfo.contact.github"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-slate-700 mb-2">B站</label>
+                      <input
+                        v-model="editedInfo.contact.bilibili"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Skills -->
+                <div class="border-t pt-6">
+                  <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-bold text-slate-800">技能列表</h3>
+                    <button
+                      @click="addSkillCategory"
+                      class="px-3 py-1 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors"
+                    >
+                      + 添加分类
+                    </button>
+                  </div>
+                  <div class="space-y-4">
+                    <div v-for="(skill, sIndex) in editedInfo.skills" :key="sIndex" class="bg-slate-50 rounded-lg p-4">
+                      <div class="flex items-center gap-2 mb-2">
+                        <input
+                          v-model="skill.category"
+                          class="flex-1 px-3 py-1 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
+                          placeholder="分类名称"
+                        />
+                        <button
+                          @click="removeSkillCategory(sIndex)"
+                          class="px-2 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600"
+                        >
+                          删除
+                        </button>
+                      </div>
+                      <div class="flex flex-wrap gap-2">
+                        <span
+                          v-for="(item, iIndex) in skill.items"
+                          :key="iIndex"
+                          class="inline-flex items-center gap-1 px-3 py-1 bg-white border border-slate-300 rounded-full text-sm"
+                        >
+                          {{ item }}
+                          <button @click="removeSkillItem(sIndex, iIndex)" class="text-red-500 hover:text-red-700">×</button>
+                        </span>
+                        <button
+                          @click="addSkillItem(sIndex)"
+                          class="px-2 py-1 border border-dashed border-slate-300 rounded-full text-sm text-slate-500 hover:border-blue-500 hover:text-blue-500"
+                        >
+                          + 添加
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Projects -->
+                <div class="border-t pt-6">
+                  <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-bold text-slate-800">项目列表</h3>
+                    <button
+                      @click="addProject"
+                      class="px-3 py-1 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors"
+                    >
+                      + 添加项目
+                    </button>
+                  </div>
+                  <div class="space-y-4">
+                    <div v-for="(project, pIndex) in editedInfo.projects" :key="pIndex" class="bg-slate-50 rounded-lg p-4">
+                      <div class="space-y-2">
+                        <input
+                          v-model="project.title"
+                          class="w-full px-3 py-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
+                          placeholder="项目标题"
+                        />
+                        <textarea
+                          v-model="project.description"
+                          rows="2"
+                          class="w-full px-3 py-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
+                          placeholder="项目描述"
+                        ></textarea>
+                        <div class="flex items-center gap-2">
+                          <label class="text-sm text-slate-600">颜色:</label>
+                          <select
+                            v-model="project.color"
+                            class="px-3 py-1 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="blue">蓝色</option>
+                            <option value="green">绿色</option>
+                            <option value="purple">紫色</option>
+                            <option value="pink">粉色</option>
+                            <option value="yellow">黄色</option>
+                          </select>
+                          <button
+                            @click="removeProject(pIndex)"
+                            class="ml-auto px-2 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600"
+                          >
+                            删除项目
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Save/Cancel Buttons -->
+                <div class="flex gap-4 pt-6">
+                  <button
+                    @click="cancelEdit"
+                    class="flex-1 px-6 py-3 border border-slate-300 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    @click="saveEdit"
+                    class="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg shadow-blue-500/30"
+                  >
+                    保存更改
+                  </button>
+                </div>
+              </div>
+            </template>
           </div>
 
           <!-- Display Mode -->
@@ -606,7 +748,14 @@ const removeProject = (index: number) => {
       </main>
     </div>
 
-    <!-- Login Dialog -->
+    <!-- Auth Dialog (Supabase) -->
+    <AuthDialog
+      :visible="showAuthDialog"
+      @close="showAuthDialog = false"
+      @success="handleAuthSuccess"
+    />
+    
+    <!-- Admin Login Dialog (Legacy) -->
     <LoginDialog
       :visible="showLoginDialog"
       @close="showLoginDialog = false"
