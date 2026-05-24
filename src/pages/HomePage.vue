@@ -179,12 +179,35 @@ const isEditMode = ref(false)
 const userAvatar = ref('')
 
 /**
+ * 初始化用户头像
+ * 从 localStorage 或 currentUser 中恢复头像
+ */
+const initUserAvatar = () => {
+  const savedAvatar = localStorage.getItem('user_avatar_' + (currentUser.value?.id || 'default'))
+  if (savedAvatar) {
+    userAvatar.value = savedAvatar
+  } else if (currentUser.value?.avatar_url) {
+    userAvatar.value = currentUser.value.avatar_url
+  }
+}
+
+/**
+ * 保存用户头像到 localStorage
+ * @param avatar - 头像的 Base64 或 URL
+ */
+const saveUserAvatar = (avatar: string) => {
+  if (currentUser.value?.id) {
+    localStorage.setItem('user_avatar_' + currentUser.value.id, avatar)
+  }
+}
+
+/**
  * 开始编辑模式
- * 保存当前信息的副本用于编辑
+ * 保存当前信息的副本用于编辑，并初始化头像
  */
 const startEdit = () => {
   Object.assign(editedInfo, JSON.parse(JSON.stringify(personalInfo)))
-  userAvatar.value = currentUser.value?.avatar_url || ''
+  initUserAvatar()
   isEditMode.value = true
 }
 
@@ -197,6 +220,7 @@ const saveEdit = async () => {
   localStorage.setItem('personal_info', JSON.stringify(personalInfo))
 
   if (userAvatar.value !== currentUser.value?.avatar_url) {
+    saveUserAvatar(userAvatar.value)
     await userStore.updateProfile({ avatar_url: userAvatar.value })
   }
 
@@ -236,8 +260,10 @@ const handleAvatarUpload = (event: Event, target: 'user' | 'personal' = 'persona
       const result = e.target?.result as string
       if (target === 'user') {
         userAvatar.value = result
+        saveUserAvatar(result)
       } else {
         editedInfo.avatar = result
+        localStorage.setItem('personal_info', JSON.stringify(editedInfo))
       }
     }
     reader.readAsDataURL(file)
@@ -265,9 +291,11 @@ const handleLogout = async () => {
 
 /**
  * 认证成功回调
+ * 登录成功后恢复用户头像
  */
 const handleAuthSuccess = () => {
   showAuthDialog.value = false
+  initUserAvatar()
 }
 
 // ============================================
