@@ -127,23 +127,23 @@ const getCategoryColor = (category: string | { zh: string; en: string }) => {
 // ============================================
 
 const displayHeroData = computed(() => {
-  return configStore.heroData
+  return configStore.heroData.value
 })
 
 const displayStats = computed(() => {
-  return configStore.stats
+  return configStore.stats.value
 })
 
 const displaySkills = computed(() => {
-  return configStore.modularSkills
+  return configStore.modularSkills.value
 })
 
 const displayProjects = computed(() => {
-  return configStore.projects
+  return configStore.projects.value
 })
 
 const displayContact = computed(() => {
-  return configStore.contactInfo
+  return configStore.contactInfo.value
 })
 
 onMounted(async () => {
@@ -222,8 +222,8 @@ onMounted(async () => {
 
           <div class="flex flex-wrap justify-center gap-8 pt-8">
             <div
-              v-for="stat in displayStats"
-              :key="stat.label.en"
+              v-for="(stat, index) in displayStats"
+              :key="index"
               class="text-center group"
             >
               <div class="text-3xl font-bold text-neutral-800 group-hover:text-blue-500 transition-colors">
