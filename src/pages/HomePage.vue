@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import AuthDialog from '@/components/AuthDialog.vue'
 import LoginDialog from '@/components/LoginDialog.vue'
 import { useUserStore } from '@/store/user'
@@ -50,13 +50,54 @@ const menuItems = ref([
 ])
 
 const activeMenu = ref('home')
-const showStatusBar = ref(false)
+const showStatusBar = ref(true)
 const statusBarPage = ref('home')
 const showLoginDialog = ref(false)
 const isEditMode = ref(false)
 const userAvatar = ref('')
 
-// Load saved data from localStorage or use defaults
+const showMobileMenu = ref(false)
+const lastScrollTop = ref(0)
+const isScrollingDown = ref(false)
+
+const handleScroll = () => {
+  const scrollTop = window.pageYOffset || document.documentElement.scrollTop
+
+  if (scrollTop > lastScrollTop.value) {
+    if (scrollTop > 100) {
+      isScrollingDown.value = true
+      showStatusBar.value = false
+    }
+  } else {
+    isScrollingDown.value = false
+    showStatusBar.value = true
+  }
+
+  lastScrollTop.value = scrollTop <= 0 ? 0 : scrollTop
+}
+
+onMounted(() => {
+  authStore.checkAuth()
+  userStore.checkSession()
+  window.addEventListener('scroll', handleScroll)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScroll)
+})
+
+const loadPersonalInfo = (): PersonalInfo => {
+  const saved = localStorage.getItem('personal_info')
+  if (saved) {
+    try {
+      return JSON.parse(saved)
+    } catch {
+      return defaultPersonalInfo
+    }
+  }
+  return defaultPersonalInfo
+}
+
 const defaultPersonalInfo: PersonalInfo = {
   avatar: '👤',
   name: '我的名字',
@@ -83,22 +124,9 @@ const defaultPersonalInfo: PersonalInfo = {
   }
 }
 
-const loadPersonalInfo = (): PersonalInfo => {
-  const saved = localStorage.getItem('personal_info')
-  if (saved) {
-    try {
-      return JSON.parse(saved)
-    } catch {
-      return defaultPersonalInfo
-    }
-  }
-  return defaultPersonalInfo
-}
-
 const personalInfo = reactive<PersonalInfo>(loadPersonalInfo())
 const editedInfo = reactive<PersonalInfo>(JSON.parse(JSON.stringify(loadPersonalInfo())))
 
-// Edit mode handlers
 const startEdit = () => {
   Object.assign(editedInfo, JSON.parse(JSON.stringify(personalInfo)))
   userAvatar.value = currentUser.value?.avatar_url || ''
@@ -108,11 +136,11 @@ const startEdit = () => {
 const saveEdit = async () => {
   Object.assign(personalInfo, JSON.parse(JSON.stringify(editedInfo)))
   localStorage.setItem('personal_info', JSON.stringify(personalInfo))
-  
+
   if (userAvatar.value !== currentUser.value?.avatar_url) {
     await userStore.updateProfile({ avatar_url: userAvatar.value })
   }
-  
+
   isEditMode.value = false
 }
 
@@ -123,40 +151,40 @@ const cancelEdit = () => {
 const handleUserAvatarUpload = (event: Event) => {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
-  
+
   if (file) {
     if (file.size > 2 * 1024 * 1024) {
       alert('图片大小不能超过 2MB')
       return
     }
-    
+
     const reader = new FileReader()
     reader.onload = (e) => {
       userAvatar.value = e.target?.result as string
     }
     reader.readAsDataURL(file)
   }
-  
+
   target.value = ''
 }
 
 const handleAvatarUpload = (event: Event) => {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
-  
+
   if (file) {
     if (file.size > 2 * 1024 * 1024) {
       alert('图片大小不能超过 2MB')
       return
     }
-    
+
     const reader = new FileReader()
     reader.onload = (e) => {
       editedInfo.avatar = e.target?.result as string
     }
     reader.readAsDataURL(file)
   }
-  
+
   target.value = ''
 }
 
@@ -181,11 +209,6 @@ const setStatusBarPage = (id: string) => {
   showStatusBar.value = false
   activeMenu.value = id
 }
-
-onMounted(async () => {
-  authStore.checkAuth()
-  await userStore.checkSession()
-})
 
 const contentData = ref({
   home: {
@@ -214,7 +237,7 @@ const contentData = ref({
     title: '专业技能',
     content: (info: PersonalInfo) => `
       <h3>技术栈</h3>
-      <div class="grid grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         ${info.skills.map(skill => `
           <div class="bg-slate-100 rounded-lg p-4">
             <h4>${skill.category}</h4>
@@ -247,24 +270,6 @@ const contentData = ref({
           </div>
           <span class="text-slate-700 group-hover:text-pink-600 transition-colors duration-300 font-medium">${info.contact.email}</span>
         </a>
-        <div class="flex items-center gap-3 p-3">
-          <div class="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
-            <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
-          </div>
-          <span class="text-slate-700">${info.contact.phone}</span>
-        </div>
-        <div class="flex items-center gap-3 p-3">
-          <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
-            <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-          </div>
-          <span class="text-slate-700">${info.contact.address}</span>
-        </div>
-        <a href="https://www.linkedin.com/in/username" target="_blank" class="flex items-center gap-3 p-3 rounded-lg transition-all duration-300 hover:bg-blue-50 hover:shadow-md group">
-          <div class="w-10 h-10 bg-blue-700 rounded-full flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:bg-blue-800">
-            <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.79M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z"/></svg>
-          </div>
-          <span class="text-slate-700 group-hover:text-blue-700 transition-colors duration-300 font-medium">LinkedIn: ${info.contact.linkedin}</span>
-        </a>
         <a href="https://github.com/XiongMao118" target="_blank" class="flex items-center gap-3 p-3 rounded-lg transition-all duration-300 hover:bg-gray-100 hover:shadow-md group">
           <div class="w-10 h-10 bg-gray-900 rounded-full flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:bg-gray-800">
             <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
@@ -282,7 +287,6 @@ const contentData = ref({
   }
 })
 
-// Skills editing
 const addSkillCategory = () => {
   editedInfo.skills.push({ category: '新技能', items: [] })
 }
@@ -302,7 +306,6 @@ const removeSkillItem = (categoryIndex: number, itemIndex: number) => {
   editedInfo.skills[categoryIndex].items.splice(itemIndex, 1)
 }
 
-// Projects editing
 const addProject = () => {
   editedInfo.projects.push({ title: '新项目', description: '项目描述', color: 'blue' })
 }
@@ -313,6 +316,94 @@ const removeProject = (index: number) => {
 </script>
 
 <template>
+  <!-- Mobile Menu Overlay -->
+  <Teleport to="body">
+    <Transition name="fade">
+      <div
+        v-if="showMobileMenu"
+        class="fixed inset-0 bg-black/50 z-50 lg:hidden"
+        @click="showMobileMenu = false"
+      >
+        <Transition name="slide">
+          <div
+            v-if="showMobileMenu"
+            class="absolute left-0 top-0 bottom-0 w-80 bg-white shadow-2xl z-50"
+            @click.stop
+          >
+            <div class="p-6">
+              <div class="flex items-center justify-between mb-8">
+                <div class="flex items-center gap-2">
+                  <span class="text-2xl">🌟</span>
+                  <span class="font-bold text-slate-800">菜单</span>
+                </div>
+                <button
+                  @click="showMobileMenu = false"
+                  class="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <svg class="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                  </svg>
+                </button>
+              </div>
+
+              <nav class="space-y-2">
+                <button
+                  v-for="item in menuItems"
+                  :key="item.id"
+                  @click="setActiveMenu(item.id); showMobileMenu = false"
+                  class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-300"
+                  :class="activeMenu === item.id
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/30'
+                    : 'text-slate-600 hover:bg-slate-100'"
+                >
+                  <span class="text-xl">{{ item.icon }}</span>
+                  <div class="flex-1 text-left">
+                    <div class="font-medium">{{ item.label }}</div>
+                    <div class="text-xs opacity-75">{{ item.description }}</div>
+                  </div>
+                </button>
+              </nav>
+
+              <div class="mt-8 pt-8 border-t">
+                <template v-if="currentUser">
+                  <div class="flex items-center gap-3 mb-4">
+                    <div class="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white overflow-hidden">
+                      <img v-if="currentUser.avatar_url" :src="currentUser.avatar_url" class="w-full h-full object-cover" />
+                      <span v-else>👤</span>
+                    </div>
+                    <div class="flex-1">
+                      <div class="font-medium text-slate-800">{{ currentUser.username || currentUser.email }}</div>
+                      <div class="text-xs text-slate-500">{{ currentUser.is_admin ? '管理员' : '用户' }}</div>
+                    </div>
+                  </div>
+                  <button
+                    @click="startEdit"
+                    class="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                  >
+                    编辑资料
+                  </button>
+                  <button
+                    @click="handleLogout"
+                    class="w-full mt-2 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                  >
+                    退出登录
+                  </button>
+                </template>
+                <button
+                  v-else
+                  @click="showAuthDialog = true; showMobileMenu = false"
+                  class="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg shadow-blue-500/30"
+                >
+                  登录/注册
+                </button>
+              </div>
+            </div>
+          </div>
+        </Transition>
+      </div>
+    </Transition>
+  </Teleport>
+
   <div class="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
     <!-- Edit Mode Header -->
     <div v-if="isEditMode" class="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg">
@@ -353,16 +444,32 @@ const removeProject = (index: number) => {
       v-if="!isEditMode"
       class="fixed top-0 left-0 right-0 z-50 transition-all duration-300 ease-out"
       :class="showStatusBar ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'"
-      @mouseleave="showStatusBar = false"
     >
       <div class="bg-white/95 backdrop-blur-md shadow-lg border-b border-slate-200">
         <div class="max-w-6xl mx-auto px-4 py-3">
           <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
+            <!-- Mobile Menu Button -->
+            <div class="flex items-center gap-2 lg:hidden">
+              <button
+                @click="showMobileMenu = true"
+                class="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <svg class="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+              </button>
               <span class="text-2xl">🌟</span>
               <span class="font-bold text-slate-800">个人主页</span>
             </div>
-            <div class="flex items-center gap-1">
+
+            <!-- Desktop Logo -->
+            <div class="hidden lg:flex items-center gap-2">
+              <span class="text-2xl">🌟</span>
+              <span class="font-bold text-slate-800">个人主页</span>
+            </div>
+
+            <!-- Desktop Menu -->
+            <div class="hidden lg:flex items-center gap-1">
               <button
                 v-for="item in menuItems"
                 :key="item.id"
@@ -373,10 +480,11 @@ const removeProject = (index: number) => {
                 {{ item.icon }} {{ item.label }}
               </button>
             </div>
-            <!-- User Auth in Status Bar -->
+
+            <!-- User Auth -->
             <div class="flex items-center gap-3">
               <template v-if="currentUser">
-                <div class="flex items-center gap-2 bg-blue-50 px-3 py-1.5 rounded-lg">
+                <div class="hidden md:flex items-center gap-2 bg-blue-50 px-3 py-1.5 rounded-lg">
                   <div class="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs overflow-hidden">
                     <img v-if="currentUser.avatar_url" :src="currentUser.avatar_url" class="w-full h-full object-cover" />
                     <span v-else>👤</span>
@@ -397,6 +505,21 @@ const removeProject = (index: number) => {
                     退出
                   </button>
                 </div>
+
+                <!-- Mobile User Avatar -->
+                <div class="lg:hidden flex items-center gap-2">
+                  <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs overflow-hidden">
+                    <img v-if="currentUser.avatar_url" :src="currentUser.avatar_url" class="w-full h-full object-cover" />
+                    <span v-else>👤</span>
+                  </div>
+                  <button
+                    v-if="!isEditMode"
+                    @click="startEdit"
+                    class="px-2 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-medium rounded hover:from-blue-700 hover:to-indigo-700 transition-all"
+                  >
+                    {{ currentUser.is_admin ? '编辑' : '修改' }}
+                  </button>
+                </div>
               </template>
               <button
                 v-else
@@ -411,16 +534,17 @@ const removeProject = (index: number) => {
       </div>
     </div>
 
-    <!-- Hover Trigger Area -->
+    <!-- Hover Trigger Area (Desktop Only) -->
     <div
       v-if="!isEditMode"
-      class="fixed top-0 left-0 right-0 h-10 z-40 cursor-pointer"
+      class="fixed top-0 left-0 right-0 h-10 z-40 cursor-pointer hidden lg:block"
       @mouseenter="showStatusBar = true"
     ></div>
 
     <!-- Main Content -->
     <div class="pt-10 flex min-h-screen">
-      <aside class="w-64 bg-white/80 backdrop-blur-sm border-r border-slate-200 flex-shrink-0">
+      <!-- Desktop Sidebar -->
+      <aside class="hidden lg:block w-64 bg-white/80 backdrop-blur-sm border-r border-slate-200 flex-shrink-0">
         <div class="p-6">
           <nav class="space-y-1">
             <button
@@ -428,25 +552,25 @@ const removeProject = (index: number) => {
               :key="item.id"
               @click="setActiveMenu(item.id)"
               class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-300 group"
-              :class="activeMenu === item.id 
-                ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/30' 
+              :class="activeMenu === item.id
+                ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/30'
                 : 'text-slate-600 hover:bg-slate-100'"
             >
               <span class="text-xl transition-transform duration-300 group-hover:scale-110">{{ item.icon }}</span>
               <div class="flex-1">
                 <div class="font-medium">{{ item.label }}</div>
-                <div 
+                <div
                   class="text-xs transition-opacity duration-300"
                   :class="activeMenu === item.id ? 'text-blue-100 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-100'"
                 >
                   {{ item.description }}
                 </div>
               </div>
-              <svg 
+              <svg
                 v-if="activeMenu === item.id"
-                class="w-4 h-4 transition-transform duration-300" 
-                fill="none" 
-                stroke="currentColor" 
+                class="w-4 h-4 transition-transform duration-300"
+                fill="none"
+                stroke="currentColor"
                 viewBox="0 0 24 24"
               >
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -456,11 +580,11 @@ const removeProject = (index: number) => {
         </div>
       </aside>
 
-      <main class="flex-1 p-8" :class="isEditMode ? 'pt-20' : ''">
+      <main class="flex-1 p-4 md:p-6 lg:p-8" :class="isEditMode ? 'pt-20' : ''">
         <div class="max-w-4xl mx-auto">
           <!-- Edit Mode Forms -->
-          <div v-if="isEditMode" class="bg-white rounded-2xl shadow-xl p-8 space-y-6 animate-in fade-in duration-300">
-            <!-- User Avatar Section (All users) -->
+          <div v-if="isEditMode" class="bg-white rounded-2xl shadow-xl p-4 md:p-8 space-y-6 animate-in fade-in duration-300">
+            <!-- User Avatar Section -->
             <div class="bg-blue-50 rounded-xl p-4 mb-6">
               <h3 class="text-lg font-semibold text-slate-800 mb-3">我的头像</h3>
               <div class="flex items-center gap-4">
@@ -497,13 +621,12 @@ const removeProject = (index: number) => {
                 </div>
               </div>
             </div>
-            
-            <!-- Admin Only: Personal Info Section -->
+
+            <!-- Admin Section -->
             <template v-if="currentUser?.is_admin">
               <div class="border-t pt-6">
                 <h2 class="text-2xl font-bold text-slate-800 border-b pb-4">个人信息编辑（管理员）</h2>
-                
-                <!-- Avatar & Basic Info -->
+
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
                   <div>
                     <label class="block text-sm font-medium text-slate-700 mb-2">头像</label>
@@ -566,35 +689,13 @@ const removeProject = (index: number) => {
                   ></textarea>
                 </div>
 
-                <!-- Contact Info -->
                 <div class="border-t pt-6">
                   <h3 class="text-xl font-bold text-slate-800 mb-4">联系方式</h3>
-                  <div class="grid grid-cols-2 gap-4">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label class="block text-sm font-medium text-slate-700 mb-2">邮箱</label>
                       <input
                         v-model="editedInfo.contact.email"
-                        class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label class="block text-sm font-medium text-slate-700 mb-2">电话</label>
-                      <input
-                        v-model="editedInfo.contact.phone"
-                        class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label class="block text-sm font-medium text-slate-700 mb-2">地址</label>
-                      <input
-                        v-model="editedInfo.contact.address"
-                        class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label class="block text-sm font-medium text-slate-700 mb-2">LinkedIn</label>
-                      <input
-                        v-model="editedInfo.contact.linkedin"
                         class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
@@ -615,7 +716,6 @@ const removeProject = (index: number) => {
                   </div>
                 </div>
 
-                <!-- Skills -->
                 <div class="border-t pt-6">
                   <div class="flex items-center justify-between mb-4">
                     <h3 class="text-xl font-bold text-slate-800">技能列表</h3>
@@ -661,7 +761,6 @@ const removeProject = (index: number) => {
                   </div>
                 </div>
 
-                <!-- Projects -->
                 <div class="border-t pt-6">
                   <div class="flex items-center justify-between mb-4">
                     <h3 class="text-xl font-bold text-slate-800">项目列表</h3>
@@ -710,8 +809,7 @@ const removeProject = (index: number) => {
                   </div>
                 </div>
 
-                <!-- Save/Cancel Buttons -->
-                <div class="flex gap-4 pt-6">
+                <div class="flex flex-col sm:flex-row gap-4 pt-6">
                   <button
                     @click="cancelEdit"
                     class="flex-1 px-6 py-3 border border-slate-300 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition-colors"
@@ -730,16 +828,16 @@ const removeProject = (index: number) => {
           </div>
 
           <!-- Display Mode -->
-          <div 
+          <div
             v-else
-            class="bg-white rounded-2xl shadow-xl shadow-slate-200/50 p-8 transition-all duration-500 transform"
+            class="bg-white rounded-2xl shadow-xl shadow-slate-200/50 p-4 md:p-8 transition-all duration-500 transform"
             :class="activeMenu === 'home' ? 'scale-100' : 'scale-95 hover:scale-100'"
           >
-            <h1 class="text-3xl font-bold text-slate-800 mb-6 flex items-center gap-3">
+            <h1 class="text-2xl md:text-3xl font-bold text-slate-800 mb-6 flex items-center gap-3">
               {{ menuItems.find(m => m.id === activeMenu)?.icon }}
               {{ contentData[activeMenu as keyof typeof contentData].title }}
             </h1>
-            <div 
+            <div
               class="prose prose-slate max-w-none"
               v-html="contentData[activeMenu as keyof typeof contentData].content(personalInfo)"
             ></div>
@@ -748,14 +846,14 @@ const removeProject = (index: number) => {
       </main>
     </div>
 
-    <!-- Auth Dialog (Supabase) -->
+    <!-- Auth Dialog -->
     <AuthDialog
       :visible="showAuthDialog"
       @close="showAuthDialog = false"
       @success="handleAuthSuccess"
     />
-    
-    <!-- Admin Login Dialog (Legacy) -->
+
+    <!-- Legacy Login Dialog -->
     <LoginDialog
       :visible="showLoginDialog"
       @close="showLoginDialog = false"
@@ -792,5 +890,25 @@ const removeProject = (index: number) => {
 
 .prose li {
   margin-bottom: 0.25rem;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.slide-enter-active,
+.slide-leave-active {
+  transition: transform 0.3s ease;
+}
+
+.slide-enter-from,
+.slide-leave-to {
+  transform: translateX(-100%);
 }
 </style>
