@@ -8,51 +8,15 @@ import AuthDialog from '@/components/AuthDialog.vue'
 import LoginDialog from '@/components/LoginDialog.vue'
 import { useUserStore } from '@/store/user'
 import { useAuthStore } from '@/store/auth'
-
-// ============================================
-// 状态管理
-// ============================================
-const contentVisible = ref(true)  // 内容可见性，用于淡入淡出动画
-const staggerKey = ref(0)  // 用于触发动画重新播放
-
-// ============================================
-// 接口定义
-// ============================================
-interface Skill {
-  category: string
-  items: string[]
-}
-
-interface Project {
-  title: string
-  description: string
-  color: string
-}
-
-interface Contact {
-  email: string
-  phone: string
-  address: string
-  linkedin: string
-  github: string
-  bilibili: string
-}
-
-interface PersonalInfo {
-  avatar: string
-  name: string
-  title: string
-  bio: string
-  skills: Skill[]
-  projects: Project[]
-  contact: Contact
-}
+import { useConfigStore } from '@/store/config'
 
 // ============================================
 // Store
 // ============================================
 const authStore = useAuthStore()
 const userStore = useUserStore()
+const configStore = useConfigStore()
+
 const showAuthDialog = ref(false)
 const currentUser = computed(() => userStore.currentUser.value)
 
@@ -65,33 +29,15 @@ const toggleLocale = () => {
   currentLocale.value = currentLocale.value === 'zh' ? 'en' : 'zh'
 }
 
-/**
- * 翻译函数
- * @param key - 翻译键，可以是字符串或双语对象
- * @returns 根据当前语言返回对应的翻译文本
- */
 const t = (key: string | { zh: string; en: string }): string => {
   if (typeof key === 'object') {
     return key[currentLocale.value]
   }
-  const translations: Record<string, { zh: string; en: string }> = {
-    '编辑': { zh: '编辑', en: 'Edit' },
-    '设置': { zh: '设置', en: 'Settings' },
-    '退出': { zh: '退出', en: 'Logout' },
-    '登录': { zh: '登录', en: 'Login' },
-    '编辑模式': { zh: '编辑模式', en: 'Edit Mode' },
-    '取消': { zh: '取消', en: 'Cancel' },
-    '保存': { zh: '保存', en: 'Save' },
-    '我的头像': { zh: '我的头像', en: 'My Avatar' },
-    '上传头像': { zh: '上传头像', en: 'Upload Avatar' },
-    '姓名': { zh: '姓名', en: 'Name' },
-    '职位': { zh: '职位', en: 'Title' },
-    '简介': { zh: '简介', en: 'Bio' },
-    '添加技能': { zh: '添加技能', en: 'Add Skill' },
-    '添加项目': { zh: '添加项目', en: 'Add Project' },
-    'Email': { zh: '邮箱', en: 'Email' },
-    'GitHub': { zh: 'GitHub', en: 'GitHub' },
-    'Bilibili': { zh: 'B站', en: 'Bilibili' },
+  const translation = configStore.t(key, currentLocale.value)
+  if (translation !== key) {
+    return translation
+  }
+  const hardcodedTranslations: Record<string, { zh: string; en: string }> = {
     'Skills': { zh: '技能', en: 'Skills' },
     'Projects': { zh: '项目', en: 'Projects' },
     'Contact': { zh: '联系', en: 'Contact' },
@@ -106,10 +52,31 @@ const t = (key: string | { zh: string; en: string }): string => {
     'Bachelor of Computer Science': { zh: '计算机科学学士', en: 'Bachelor of Computer Science' },
     'Years of industry experience': { zh: '多年行业经验', en: 'Years of industry experience' },
     'Just for fun': { zh: '只为乐趣', en: 'Just for fun' },
-    'Passion': { zh: '热情', en: 'Passion' }
+    'Passion': { zh: '热情', en: 'Passion' },
+    '编辑': { zh: '编辑', en: 'Edit' },
+    '设置': { zh: '设置', en: 'Settings' },
+    '退出': { zh: '退出', en: 'Logout' },
+    '登录': { zh: '登录', en: 'Login' },
+    '编辑模式': { zh: '编辑模式', en: 'Edit Mode' },
+    '取消': { zh: '取消', en: 'Cancel' },
+    '保存': { zh: '保存', en: 'Save' },
+    '我的头像': { zh: '我的头像', en: 'My Avatar' },
+    '上传头像': { zh: '上传头像', en: 'Upload Avatar' },
+    '姓名': { zh: '姓名', en: 'Name' },
+    '职位': { zh: '职位', en: 'Title' },
+    '简介': { zh: '简介', en: 'Bio' },
+    'Email': { zh: '邮箱', en: 'Email' },
+    'GitHub': { zh: 'GitHub', en: 'GitHub' },
+    'Bilibili': { zh: 'B站', en: 'Bilibili' }
   }
-  return translations[key]?.[currentLocale.value] || key
+  return hardcodedTranslations[key]?.[currentLocale.value] || key
 }
+
+// ============================================
+// 状态管理
+// ============================================
+const contentVisible = ref(true)
+const staggerKey = ref(0)
 
 // ============================================
 // 菜单管理
@@ -126,51 +93,11 @@ const menuItems = ref([
   { id: 'contact', label: { zh: '联系', en: 'Contact' } }
 ])
 
-onMounted(() => {
+onMounted(async () => {
   authStore.checkAuth()
   userStore.checkSession()
+  await configStore.fetchAllConfigs()
 })
-
-const loadPersonalInfo = (): PersonalInfo => {
-  const saved = localStorage.getItem('personal_info')
-  if (saved) {
-    try {
-      return JSON.parse(saved)
-    } catch {
-      return defaultPersonalInfo
-    }
-  }
-  return defaultPersonalInfo
-}
-
-const defaultPersonalInfo: PersonalInfo = {
-  avatar: '',
-  name: '我的名字',
-  title: '前端开发者',
-  bio: '我是一名充满热情的开发者，专注于前端开发和用户体验设计。',
-  skills: [
-    { category: '前端技术', items: ['Vue.js', 'React', 'TypeScript', 'JavaScript', 'HTML5', 'CSS3'] },
-    { category: '后端技术', items: ['Node.js', 'Express', 'MongoDB', 'PostgreSQL'] },
-    { category: '工具与框架', items: ['Webpack', 'Vite', 'Git', 'Docker'] },
-    { category: '设计能力', items: ['Figma', 'Photoshop', 'UI/UX设计'] }
-  ],
-  projects: [
-    { title: '个人博客系统', description: '基于 Vue3 + Node.js 构建的现代化博客平台，支持 Markdown 编辑和实时预览。', color: 'blue' },
-    { title: '数据可视化仪表盘', description: '交互式数据展示平台，支持多种图表类型和实时数据更新。', color: 'green' },
-    { title: '电商管理系统', description: '完整的电商后台管理系统，包含订单管理、库存管理和数据分析功能。', color: 'purple' }
-  ],
-  contact: {
-    email: 'email@example.com',
-    phone: '+86 123-4567-8900',
-    address: '北京市朝阳区',
-    linkedin: 'linkedin.com/in/username',
-    github: 'github.com/XiongMao118',
-    bilibili: 'space.bilibili.com/550003217'
-  }
-}
-
-const personalInfo = reactive<PersonalInfo>(loadPersonalInfo())
-const editedInfo = reactive<PersonalInfo>(JSON.parse(JSON.stringify(loadPersonalInfo())))
 
 // ============================================
 // 编辑模式
@@ -178,46 +105,48 @@ const editedInfo = reactive<PersonalInfo>(JSON.parse(JSON.stringify(loadPersonal
 const isEditMode = ref(false)
 const userAvatar = ref('')
 
-/**
- * 初始化用户头像
- * 从 localStorage 或 currentUser 中恢复头像
- */
 const initUserAvatar = () => {
   const savedAvatar = localStorage.getItem('user_avatar_' + (currentUser.value?.id || 'default'))
   if (savedAvatar) {
     userAvatar.value = savedAvatar
   } else if (currentUser.value?.avatar_url) {
     userAvatar.value = currentUser.value.avatar_url
+  } else if (configStore.personalInfo.value?.avatar) {
+    userAvatar.value = configStore.personalInfo.value.avatar
   }
 }
 
-/**
- * 保存用户头像到 localStorage
- * @param avatar - 头像的 Base64 或 URL
- */
 const saveUserAvatar = (avatar: string) => {
   if (currentUser.value?.id) {
     localStorage.setItem('user_avatar_' + currentUser.value.id, avatar)
   }
 }
 
-/**
- * 开始编辑模式
- * 保存当前信息的副本用于编辑，并初始化头像
- */
 const startEdit = () => {
-  Object.assign(editedInfo, JSON.parse(JSON.stringify(personalInfo)))
   initUserAvatar()
   isEditMode.value = true
 }
 
-/**
- * 保存编辑内容
- * 将编辑的信息保存到 localStorage 并更新用户头像
- */
 const saveEdit = async () => {
-  Object.assign(personalInfo, JSON.parse(JSON.stringify(editedInfo)))
-  localStorage.setItem('personal_info', JSON.stringify(personalInfo))
+  if (currentUser.value?.is_admin) {
+    await configStore.updatePersonalInfo({
+      avatar: configStore.personalInfo.value?.avatar || '',
+      name: configStore.personalInfo.value?.name || { zh: '', en: '' },
+      title: configStore.personalInfo.value?.title || { zh: '', en: '' },
+      bio: configStore.personalInfo.value?.bio || { zh: '', en: '' }
+    })
+    await configStore.updateContact(configStore.contactInfo.value || {
+      email: '',
+      phone: '',
+      address: { zh: '', en: '' },
+      linkedin: '',
+      github: '',
+      bilibili: ''
+    })
+    
+    await configStore.updateSkills(configStore.skills.value || [])
+    await configStore.updateProjects(configStore.projects.value || [])
+  }
 
   if (userAvatar.value !== currentUser.value?.avatar_url) {
     saveUserAvatar(userAvatar.value)
@@ -227,10 +156,6 @@ const saveEdit = async () => {
   isEditMode.value = false
 }
 
-/**
- * 取消编辑
- * 恢复到未编辑状态
- */
 const cancelEdit = () => {
   isEditMode.value = false
 }
@@ -239,48 +164,71 @@ const cancelEdit = () => {
 // 头像上传
 // ============================================
 
-/**
- * 处理头像上传
- * @param event - 文件输入事件
- * @param target - 上传目标：'user' 表示用户头像，'personal' 表示个人信息头像
- */
-const handleAvatarUpload = (event: Event, target: 'user' | 'personal' = 'personal') => {
+const handleAvatarUpload = (event: Event) => {
   const targetEl = event.target as HTMLInputElement
   const file = targetEl.files?.[0]
 
   if (file) {
-    // 检查文件大小（限制 2MB）
     if (file.size > 2 * 1024 * 1024) {
       alert('图片大小不能超过 2MB')
+      targetEl.value = ''
       return
     }
 
     const reader = new FileReader()
     reader.onload = (e) => {
       const result = e.target?.result as string
-      if (target === 'user') {
-        userAvatar.value = result
-        saveUserAvatar(result)
-      } else {
-        editedInfo.avatar = result
-        localStorage.setItem('personal_info', JSON.stringify(editedInfo))
+      userAvatar.value = result
+      saveUserAvatar(result)
+      // 如果是管理员，同时也更新首页的管理员头像
+      if (currentUser.value?.is_admin) {
+        configStore.personalInfo.value!.avatar = result
       }
+      targetEl.value = ''
+    }
+    reader.onerror = () => {
+      alert('图片读取失败，请重试')
+      targetEl.value = ''
     }
     reader.readAsDataURL(file)
+  } else {
+    targetEl.value = ''
   }
+}
 
-  // 清空 input 以便下次选择相同文件
-  targetEl.value = ''
+const removeAvatar = () => {
+  userAvatar.value = ''
+  saveUserAvatar('')
+  if (currentUser.value?.is_admin) {
+    configStore.personalInfo.value!.avatar = ''
+  }
+}
+
+// ============================================
+// 表单辅助函数
+// ============================================
+
+const getFieldValue = (field: any, lang: 'zh' | 'en'): string => {
+  if (typeof field === 'object' && field !== null) {
+    return lang === 'zh' ? (field.zh || '') : (field.en || '')
+  }
+  return field || ''
+}
+
+const updateFieldValue = (fieldRef: any, lang: 'zh' | 'en', value: string) => {
+  if (typeof fieldRef.value === 'object' && fieldRef.value !== null) {
+    fieldRef.value[lang] = value
+  } else {
+    if (lang === 'zh') {
+      fieldRef.value = value
+    }
+  }
 }
 
 // ============================================
 // 用户认证
 // ============================================
 
-/**
- * 处理用户登出
- * 清除登录状态并关闭编辑模式
- */
 const handleLogout = async () => {
   await userStore.signOut()
   authStore.logout()
@@ -289,10 +237,6 @@ const handleLogout = async () => {
   showLoginDialog.value = false
 }
 
-/**
- * 认证成功回调
- * 登录成功后恢复用户头像
- */
 const handleAuthSuccess = () => {
   showAuthDialog.value = false
   initUserAvatar()
@@ -302,11 +246,6 @@ const handleAuthSuccess = () => {
 // 菜单导航
 // ============================================
 
-/**
- * 设置当前活动菜单
- * @param id - 菜单项 ID
- * 实现淡入淡出过渡效果
- */
 const setActiveMenu = async (id: string) => {
   if (activeMenu.value === id) return
   contentVisible.value = false
@@ -321,59 +260,88 @@ const setActiveMenu = async (id: string) => {
 // 技能管理
 // ============================================
 
-/**
- * 添加新的技能分类
- */
 const addSkillCategory = () => {
-  editedInfo.skills.push({ category: '新技能', items: [] })
-}
-
-/**
- * 移除技能分类
- * @param index - 要移除的分类索引
- */
-const removeSkillCategory = (index: number) => {
-  editedInfo.skills.splice(index, 1)
-}
-
-/**
- * 添加技能项目到指定分类
- * @param categoryIndex - 分类索引
- */
-const addSkillItem = (categoryIndex: number) => {
-  const newItem = prompt('请输入技能名称')
-  if (newItem && newItem.trim()) {
-    editedInfo.skills[categoryIndex].items.push(newItem.trim())
+  if (configStore.skills.value) {
+    configStore.skills.value.push({ 
+      category: { zh: '新技能', en: 'New Skill' }, 
+      items: [] 
+    })
   }
 }
 
-/**
- * 移除技能项目
- * @param categoryIndex - 分类索引
- * @param itemIndex - 项目索引
- */
+const removeSkillCategory = (index: number) => {
+  if (configStore.skills.value) {
+    configStore.skills.value.splice(index, 1)
+  }
+}
+
+const addSkillItem = (categoryIndex: number) => {
+  const newItem = prompt('请输入技能名称')
+  if (newItem && newItem.trim()) {
+    if (configStore.skills.value && configStore.skills.value[categoryIndex]) {
+      configStore.skills.value[categoryIndex].items.push(newItem.trim())
+    }
+  }
+}
+
 const removeSkillItem = (categoryIndex: number, itemIndex: number) => {
-  editedInfo.skills[categoryIndex].items.splice(itemIndex, 1)
+  if (configStore.skills.value && configStore.skills.value[categoryIndex]) {
+    configStore.skills.value[categoryIndex].items.splice(itemIndex, 1)
+  }
 }
 
 // ============================================
 // 项目管理
 // ============================================
 
-/**
- * 添加新项目
- */
 const addProject = () => {
-  editedInfo.projects.push({ title: '新项目', description: '项目描述', color: 'blue' })
+  if (configStore.projects.value) {
+    configStore.projects.value.push({ 
+      title: { zh: '新项目', en: 'New Project' }, 
+      description: { zh: '项目描述', en: 'Project description' }, 
+      color: 'blue' 
+    })
+  }
 }
 
-/**
- * 移除项目
- * @param index - 要移除的项目索引
- */
 const removeProject = (index: number) => {
-  editedInfo.projects.splice(index, 1)
+  if (configStore.projects.value) {
+    configStore.projects.value.splice(index, 1)
+  }
 }
+
+// ============================================
+  // 计算属性
+  // ============================================
+
+  const displayAvatar = computed(() => {
+    return userAvatar.value || configStore.personalInfo.value.avatar || ''
+  })
+
+  const displayName = computed(() => {
+    return configStore.getLocalizedText(configStore.personalInfo.value.name, currentLocale.value)
+  })
+
+  const displayTitle = computed(() => {
+    return configStore.getLocalizedText(configStore.personalInfo.value.title, currentLocale.value)
+  })
+
+  const displayBio = computed(() => {
+    return configStore.getLocalizedText(configStore.personalInfo.value.bio, currentLocale.value)
+  })
+
+  const displaySkills = computed(() => {
+    return Array.isArray(configStore.skills.value) ? configStore.skills.value : []
+  })
+
+  const displayProjects = computed(() => {
+    return Array.isArray(configStore.projects.value) ? configStore.projects.value : []
+  })
+
+  const displayContact = computed(() => {
+    return configStore.contactInfo.value
+  })
+
 </script>
 
 <template>
@@ -401,6 +369,43 @@ const removeProject = (index: number) => {
           
           <div class="flex items-center gap-3">
             <template v-if="currentUser">
+              <div class="relative group">
+                <div class="w-9 h-9 rounded-full overflow-hidden bg-neutral-100 cursor-pointer border-2 border-transparent hover:border-neutral-300 transition-all duration-200">
+                  <img v-if="userAvatar" :src="userAvatar" class="w-full h-full object-cover" />
+                  <span v-else class="flex items-center justify-center w-full h-full text-sm font-medium text-neutral-500">
+                    {{ currentUser.email?.charAt(0).toUpperCase() || 'U' }}
+                  </span>
+                </div>
+                <div class="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-lg border border-neutral-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 overflow-hidden">
+                  <div class="p-3 border-b border-neutral-100">
+                    <p class="text-xs text-neutral-500 truncate">{{ currentUser.email }}</p>
+                  </div>
+                  <div class="p-2">
+                    <label class="flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50 rounded-md cursor-pointer transition-colors duration-200">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        class="hidden"
+                        @change="(e) => handleAvatarUpload(e, 'user')"
+                      />
+                      <svg class="w-5 h-5 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <span>选择新图片</span>
+                    </label>
+                    <button 
+                      v-if="userAvatar"
+                      @click="removeAvatar"
+                      class="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors duration-200"
+                    >
+                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      <span>移除头像</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
               <button
                 @click="startEdit"
                 class="btn-edit text-sm text-neutral-600 hover:text-neutral-900 transition-all duration-200 hover:bg-neutral-100 px-3 py-1.5 rounded-md"
@@ -510,77 +515,93 @@ const removeProject = (index: number) => {
       <div class="max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         
         <div v-if="isEditMode" class="space-y-8">
-          <div class="space-y-4">
-            <h2 class="text-lg font-medium text-neutral-800">{{ t('我的头像') }}</h2>
-            <div class="flex items-center gap-4">
-              <div class="w-16 h-16 rounded-full bg-neutral-100 overflow-hidden">
-                <img v-if="userAvatar" :src="userAvatar" class="w-full h-full object-cover" />
-                <span v-else class="flex items-center justify-center w-full h-full text-2xl text-neutral-400">?</span>
-              </div>
-              <div class="flex-1 space-y-2">
-                <input
-                  v-model="userAvatar"
-                  class="w-full px-3 py-2 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400"
-                  placeholder="输入图片URL"
-                />
-                <label class="inline-block text-sm text-neutral-500 cursor-pointer hover:text-neutral-700">
-                  选择本地图片
-                  <input
-                    type="file"
-                    accept="image/*"
-                    class="hidden"
-                    @change="handleAvatarUpload"
-                  />
-                </label>
-              </div>
-            </div>
-          </div>
-
           <template v-if="currentUser?.is_admin">
             <div class="border-t border-neutral-100 pt-8 space-y-6">
               <h2 class="text-lg font-medium text-neutral-800">个人信息</h2>
               
               <div class="grid grid-cols-1 gap-4">
                 <div>
-                  <label class="block text-sm text-neutral-500 mb-1">头像</label>
-                  <div class="flex items-center gap-3">
+                  <label class="block text-sm text-neutral-500 mb-1">{{ t('姓名') }}</label>
+                  <div class="grid grid-cols-2 gap-2">
                     <input
-                      v-model="editedInfo.avatar"
-                      class="flex-1 px-3 py-2 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400"
-                      placeholder="图片URL"
+                      :value="typeof configStore.personalInfo.value.name === 'object' ? configStore.personalInfo.value.name.zh : configStore.personalInfo.value.name"
+                      @input="(e) => {
+                        if (typeof configStore.personalInfo.value.name === 'object') {
+                          configStore.personalInfo.value.name.zh = (e.target as HTMLInputElement).value
+                        } else {
+                          configStore.personalInfo.value.name = (e.target as HTMLInputElement).value
+                        }
+                      }"
+                      class="w-full px-3 py-2 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400"
+                      placeholder="中文名"
                     />
-                    <label class="text-sm text-neutral-500 cursor-pointer hover:text-neutral-700">
-                      上传
-                      <input
-                        type="file"
-                        accept="image/*"
-                        class="hidden"
-                        @change="handleAvatarUpload"
-                      />
-                    </label>
+                    <input
+                      :value="typeof configStore.personalInfo.value.name === 'object' ? configStore.personalInfo.value.name.en : ''"
+                      @input="(e) => {
+                        if (typeof configStore.personalInfo.value.name === 'object') {
+                          configStore.personalInfo.value.name.en = (e.target as HTMLInputElement).value
+                        }
+                      }"
+                      class="w-full px-3 py-2 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400"
+                      placeholder="English name"
+                    />
                   </div>
                 </div>
                 <div>
-                  <label class="block text-sm text-neutral-500 mb-1">{{ t('姓名') }}</label>
-                  <input
-                    v-model="editedInfo.name"
-                    class="w-full px-3 py-2 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400"
-                  />
-                </div>
-                <div>
                   <label class="block text-sm text-neutral-500 mb-1">{{ t('职位') }}</label>
-                  <input
-                    v-model="editedInfo.title"
-                    class="w-full px-3 py-2 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400"
-                  />
+                  <div class="grid grid-cols-2 gap-2">
+                    <input
+                      :value="typeof configStore.personalInfo.value.title === 'object' ? configStore.personalInfo.value.title.zh : configStore.personalInfo.value.title"
+                      @input="(e) => {
+                        if (typeof configStore.personalInfo.value.title === 'object') {
+                          configStore.personalInfo.value.title.zh = (e.target as HTMLInputElement).value
+                        } else {
+                          configStore.personalInfo.value.title = (e.target as HTMLInputElement).value
+                        }
+                      }"
+                      class="w-full px-3 py-2 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400"
+                      placeholder="中文职位"
+                    />
+                    <input
+                      :value="typeof configStore.personalInfo.value.title === 'object' ? configStore.personalInfo.value.title.en : ''"
+                      @input="(e) => {
+                        if (typeof configStore.personalInfo.value.title === 'object') {
+                          configStore.personalInfo.value.title.en = (e.target as HTMLInputElement).value
+                        }
+                      }"
+                      class="w-full px-3 py-2 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400"
+                      placeholder="English title"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label class="block text-sm text-neutral-500 mb-1">{{ t('简介') }}</label>
-                  <textarea
-                    v-model="editedInfo.bio"
-                    rows="3"
-                    class="w-full px-3 py-2 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400 resize-none"
-                  ></textarea>
+                  <div class="grid grid-cols-2 gap-2">
+                    <textarea
+                      :value="typeof configStore.personalInfo.value.bio === 'object' ? configStore.personalInfo.value.bio.zh : configStore.personalInfo.value.bio"
+                      @input="(e) => {
+                        if (typeof configStore.personalInfo.value.bio === 'object') {
+                          configStore.personalInfo.value.bio.zh = (e.target as HTMLTextAreaElement).value
+                        } else {
+                          configStore.personalInfo.value.bio = (e.target as HTMLTextAreaElement).value
+                        }
+                      }"
+                      rows="3"
+                      class="w-full px-3 py-2 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400 resize-none"
+                      placeholder="中文简介"
+                    ></textarea>
+                    <textarea
+                      :value="typeof configStore.personalInfo.value.bio === 'object' ? configStore.personalInfo.value.bio.en : ''"
+                      @input="(e) => {
+                        if (typeof configStore.personalInfo.value.bio === 'object') {
+                          configStore.personalInfo.value.bio.en = (e.target as HTMLTextAreaElement).value
+                        }
+                      }"
+                      rows="3"
+                      class="w-full px-3 py-2 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400 resize-none"
+                      placeholder="English bio"
+                    ></textarea>
+                  </div>
                 </div>
               </div>
             </div>
@@ -591,21 +612,21 @@ const removeProject = (index: number) => {
                 <div>
                   <label class="block text-sm text-neutral-500 mb-1">邮箱</label>
                   <input
-                    v-model="editedInfo.contact.email"
+                    v-model="configStore.contactInfo.value!.email"
                     class="w-full px-3 py-2 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400"
                   />
                 </div>
                 <div>
                   <label class="block text-sm text-neutral-500 mb-1">GitHub</label>
                   <input
-                    v-model="editedInfo.contact.github"
+                    v-model="configStore.contactInfo.value!.github"
                     class="w-full px-3 py-2 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400"
                   />
                 </div>
                 <div>
                   <label class="block text-sm text-neutral-500 mb-1">B站</label>
                   <input
-                    v-model="editedInfo.contact.bilibili"
+                    v-model="configStore.contactInfo.value!.bilibili"
                     class="w-full px-3 py-2 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400"
                   />
                 </div>
@@ -623,13 +644,32 @@ const removeProject = (index: number) => {
                 </button>
               </div>
               <div class="space-y-4">
-                <div v-for="(skill, sIndex) in editedInfo.skills" :key="sIndex" class="border border-neutral-100 p-4">
+                <div v-for="(skill, sIndex) in configStore.skills.value" :key="sIndex" class="border border-neutral-100 p-4">
                   <div class="flex items-center gap-2 mb-3">
-                    <input
-                      v-model="skill.category"
-                      class="flex-1 px-2 py-1 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400"
-                      placeholder="分类名称"
-                    />
+                    <div class="grid grid-cols-2 gap-2 flex-1">
+                      <input
+                        :value="typeof skill.category === 'object' ? skill.category.zh : skill.category"
+                        @input="(e) => {
+                          if (typeof skill.category === 'object') {
+                            skill.category.zh = (e.target as HTMLInputElement).value
+                          } else {
+                            skill.category = (e.target as HTMLInputElement).value
+                          }
+                        }"
+                        class="px-2 py-1 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400"
+                        placeholder="中文分类"
+                      />
+                      <input
+                        :value="typeof skill.category === 'object' ? skill.category.en : ''"
+                        @input="(e) => {
+                          if (typeof skill.category === 'object') {
+                            skill.category.en = (e.target as HTMLInputElement).value
+                          }
+                        }"
+                        class="px-2 py-1 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400"
+                        placeholder="English category"
+                      />
+                    </div>
                     <button
                       @click="removeSkillCategory(sIndex)"
                       class="text-sm text-neutral-400 hover:text-red-500"
@@ -668,19 +708,58 @@ const removeProject = (index: number) => {
                 </button>
               </div>
               <div class="space-y-4">
-                <div v-for="(project, pIndex) in editedInfo.projects" :key="pIndex" class="border border-neutral-100 p-4">
+                <div v-for="(project, pIndex) in configStore.projects.value" :key="pIndex" class="border border-neutral-100 p-4">
                   <div class="space-y-3">
-                    <input
-                      v-model="project.title"
-                      class="w-full px-2 py-1 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400"
-                      placeholder="项目标题"
-                    />
-                    <textarea
-                      v-model="project.description"
-                      rows="2"
-                      class="w-full px-2 py-1 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400 resize-none"
-                      placeholder="项目描述"
-                    ></textarea>
+                    <div class="grid grid-cols-2 gap-2">
+                      <input
+                        :value="typeof project.title === 'object' ? project.title.zh : project.title"
+                        @input="(e) => {
+                          if (typeof project.title === 'object') {
+                            project.title.zh = (e.target as HTMLInputElement).value
+                          } else {
+                            project.title = (e.target as HTMLInputElement).value
+                          }
+                        }"
+                        class="w-full px-2 py-1 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400"
+                        placeholder="中文标题"
+                      />
+                      <input
+                        :value="typeof project.title === 'object' ? project.title.en : ''"
+                        @input="(e) => {
+                          if (typeof project.title === 'object') {
+                            project.title.en = (e.target as HTMLInputElement).value
+                          }
+                        }"
+                        class="w-full px-2 py-1 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400"
+                        placeholder="English title"
+                      />
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                      <textarea
+                        :value="typeof project.description === 'object' ? project.description.zh : project.description"
+                        @input="(e) => {
+                          if (typeof project.description === 'object') {
+                            project.description.zh = (e.target as HTMLTextAreaElement).value
+                          } else {
+                            project.description = (e.target as HTMLTextAreaElement).value
+                          }
+                        }"
+                        rows="2"
+                        class="w-full px-2 py-1 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400 resize-none"
+                        placeholder="中文描述"
+                      ></textarea>
+                      <textarea
+                        :value="typeof project.description === 'object' ? project.description.en : ''"
+                        @input="(e) => {
+                          if (typeof project.description === 'object') {
+                            project.description.en = (e.target as HTMLTextAreaElement).value
+                          }
+                        }"
+                        rows="2"
+                        class="w-full px-2 py-1 border border-neutral-200 text-sm focus:outline-none focus:border-neutral-400 resize-none"
+                        placeholder="English description"
+                      ></textarea>
+                    </div>
                     <div class="flex items-center justify-between">
                       <select
                         v-model="project.color"
@@ -710,28 +789,28 @@ const removeProject = (index: number) => {
           <section v-if="activeMenu === 'home'" class="space-y-12 relative">
             <div class="text-center space-y-6">
               <div class="avatar-container w-24 h-24 mx-auto rounded-full bg-gradient-to-br from-neutral-100 to-neutral-200 overflow-hidden cursor-pointer transition-all duration-300 hover:scale-105 relative">
-                <img v-if="personalInfo.avatar" :src="personalInfo.avatar" class="w-full h-full object-cover" />
+                <img v-if="configStore.personalInfo.value.avatar" :src="configStore.personalInfo.value.avatar" class="w-full h-full object-cover" />
                 <span v-else class="flex items-center justify-center w-full h-full text-4xl text-neutral-400">?</span>
-                <div class="avatar-ring absolute inset-0 rounded-full border-2 border-neutral-300 opacity-0 hover:opacity-100 transition-opacity duration-300"></div>
+                <div v-if="currentUser?.is_admin" class="avatar-ring absolute inset-0 rounded-full border-2 border-neutral-300 opacity-0 hover:opacity-100 transition-opacity duration-300"></div>
               </div>
-              <h1 class="text-3xl font-medium text-neutral-900 stagger-item">{{ personalInfo.name }}</h1>
-              <p class="text-neutral-500 stagger-item">{{ personalInfo.title }}</p>
+              <h1 class="text-3xl font-medium text-neutral-900 stagger-item">{{ displayName }}</h1>
+              <p class="text-neutral-500 stagger-item">{{ displayTitle }}</p>
               <p class="text-sm text-neutral-400 stagger-item italic">"{{ t('Just for fun') }}"</p>
             </div>
             
             <div class="text-center max-w-lg mx-auto">
               <p class="text-neutral-600 leading-relaxed stagger-item">
-                {{ personalInfo.bio }}
+                {{ displayBio }}
               </p>
             </div>
 
             <div class="grid grid-cols-4 gap-8 text-center">
               <div class="stat-item stagger-item transition-all duration-300 hover:scale-105">
-                <div class="text-3xl font-semibold text-neutral-800">{{ personalInfo.skills.length * 6 }}</div>
+                <div class="text-3xl font-semibold text-neutral-800">{{ displaySkills.reduce((sum, skill) => sum + skill.items.length, 0) }}</div>
                 <div class="text-xs text-neutral-400 mt-1 uppercase tracking-wider">{{ t('Skills') }}</div>
               </div>
               <div class="stat-item stagger-item transition-all duration-300 hover:scale-105">
-                <div class="text-3xl font-semibold text-neutral-800">{{ personalInfo.projects.length }}</div>
+                <div class="text-3xl font-semibold text-neutral-800">{{ displayProjects.length }}</div>
                 <div class="text-xs text-neutral-400 mt-1 uppercase tracking-wider">{{ t('Projects') }}</div>
               </div>
               <div class="stat-item stagger-item transition-all duration-300 hover:scale-105">
@@ -747,7 +826,7 @@ const removeProject = (index: number) => {
 
           <section v-if="activeMenu === 'about'" class="space-y-8">
             <h2 class="text-xl font-medium text-neutral-900 stagger-item">{{ t('About') }}</h2>
-            <p class="text-neutral-600 leading-relaxed stagger-item">{{ personalInfo.bio }}</p>
+            <p class="text-neutral-600 leading-relaxed stagger-item">{{ displayBio }}</p>
             
             <div class="space-y-6">
               <div class="space-y-2 stagger-item">
@@ -773,8 +852,8 @@ const removeProject = (index: number) => {
           <section v-if="activeMenu === 'skills'" class="space-y-8">
             <h2 class="text-xl font-medium text-neutral-900 stagger-item">{{ t('Skills') }}</h2>
             <div class="space-y-6">
-              <div v-for="(skill, index) in personalInfo.skills" :key="skill.category" class="space-y-3 stagger-item" :style="{ animationDelay: `${index * 0.1}s` }">
-                <h3 class="text-xs font-medium text-neutral-400 uppercase tracking-wider">{{ skill.category }}</h3>
+              <div v-for="(skill, index) in displaySkills" :key="typeof skill.category === 'object' ? skill.category.zh || skill.category.en : skill.category" class="space-y-3 stagger-item" :style="{ animationDelay: `${index * 0.1}s` }">
+                <h3 class="text-sm font-semibold text-neutral-700 pb-2 border-b border-neutral-200">{{ configStore.getLocalizedText(skill.category, currentLocale) }}</h3>
                 <div class="flex flex-wrap gap-2">
                   <span 
                     v-for="(item, idx) in skill.items" 
@@ -793,14 +872,14 @@ const removeProject = (index: number) => {
             <h2 class="text-xl font-medium text-neutral-900 stagger-item">{{ t('Projects') }}</h2>
             <div class="space-y-6">
               <div 
-                v-for="(project, index) in personalInfo.projects" 
-                :key="project.title" 
+                v-for="(project, index) in displayProjects" 
+                :key="typeof project.title === 'object' ? project.title.zh || project.title.en : project.title" 
                 class="project-card group p-4 -mx-4 rounded-lg transition-all duration-300 hover:bg-neutral-50 hover:shadow-md stagger-item"
                 :style="{ animationDelay: `${index * 0.1}s` }"
               >
                 <div class="space-y-2">
-                  <h3 class="text-lg font-medium text-neutral-800">{{ project.title }}</h3>
-                  <p class="text-sm text-neutral-600 leading-relaxed">{{ project.description }}</p>
+                  <h3 class="text-lg font-medium text-neutral-800">{{ configStore.getLocalizedText(project.title, currentLocale) }}</h3>
+                  <p class="text-sm text-neutral-600 leading-relaxed">{{ configStore.getLocalizedText(project.description, currentLocale) }}</p>
                 </div>
               </div>
             </div>
@@ -810,27 +889,27 @@ const removeProject = (index: number) => {
             <h2 class="text-xl font-medium text-neutral-900 stagger-item">{{ t('Contact') }}</h2>
             <div class="space-y-3">
               <a 
-                :href="`mailto:${personalInfo.contact.email}`" 
+                :href="`mailto:${displayContact.email}`" 
                 class="contact-link flex items-center gap-3 py-2 text-neutral-600 hover:text-neutral-900 transition-all duration-200 border-b border-neutral-100 hover:border-neutral-300 stagger-item"
               >
                 <span class="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center text-sm">@</span>
-                <span>{{ currentUser?.is_admin ? personalInfo.contact.email : t('Email') }}</span>
+                <span>{{ currentUser?.is_admin ? displayContact.email : t('Email') }}</span>
               </a>
               <a 
-                href="https://github.com/XiongMao118" 
+                :href="`https://${displayContact.github}`" 
                 target="_blank"
                 class="contact-link flex items-center gap-3 py-2 text-neutral-600 hover:text-neutral-900 transition-all duration-200 border-b border-neutral-100 hover:border-neutral-300 stagger-item"
               >
                 <span class="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center text-sm">G</span>
-                <span>{{ currentUser?.is_admin ? personalInfo.contact.github : t('GitHub') }}</span>
+                <span>{{ currentUser?.is_admin ? displayContact.github : t('GitHub') }}</span>
               </a>
               <a 
-                href="https://space.bilibili.com/550003217" 
+                :href="`https://${displayContact.bilibili}`" 
                 target="_blank"
                 class="contact-link flex items-center gap-3 py-2 text-neutral-600 hover:text-neutral-900 transition-all duration-200 border-b border-neutral-100 hover:border-neutral-300 stagger-item"
               >
                 <span class="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center text-sm">B</span>
-                <span>{{ currentUser?.is_admin ? personalInfo.contact.bilibili : t('Bilibili') }}</span>
+                <span>{{ currentUser?.is_admin ? displayContact.bilibili : t('Bilibili') }}</span>
               </a>
             </div>
           </section>
@@ -839,7 +918,7 @@ const removeProject = (index: number) => {
 
         <footer class="mt-24 pt-8 border-t border-neutral-100 text-center">
           <p class="text-sm text-neutral-400">
-            © {{ new Date().getFullYear() }} {{ personalInfo.name }}
+            © {{ new Date().getFullYear() }} {{ displayName }}
           </p>
           <p class="text-xs text-neutral-300 mt-2">
             <a href="https://beian.miit.gov.cn/" target="_blank" class="hover:text-neutral-500 transition-colors">

@@ -4,15 +4,17 @@
  * 功能：展示模块化的个人作品集页面，包含 Hero、About、Skills、Projects、Contact 等模块
  * 支持中英双语切换
  */
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useUserStore } from '@/store/user'
 import { useAuthStore } from '@/store/auth'
+import { useConfigStore } from '@/store/config'
 
 // ============================================
 // Store
 // ============================================
 const authStore = useAuthStore()
 const userStore = useUserStore()
+const configStore = useConfigStore()
 const currentUser = computed(() => userStore.currentUser.value)
 
 // ============================================
@@ -24,13 +26,12 @@ const toggleLocale = () => {
   currentLocale.value = currentLocale.value === 'zh' ? 'en' : 'zh'
 }
 
-/**
- * 翻译函数
- * @param key - 翻译键
- * @returns 根据当前语言返回对应的翻译文本
- */
 const t = (key: string): string => {
-  const translations: Record<string, { zh: string; en: string }> = {
+  const translation = configStore.t(key, currentLocale.value)
+  if (translation !== key) {
+    return translation
+  }
+  const hardcodedTranslations: Record<string, { zh: string; en: string }> = {
     'Portfolio': { zh: '作品集', en: 'Portfolio' },
     'Hero': { zh: '首页', en: 'Hero' },
     'About': { zh: '关于', en: 'About' },
@@ -41,54 +42,38 @@ const t = (key: string): string => {
     'Profile': { zh: '个人资料', en: 'Profile' },
     'Login': { zh: '登录', en: 'Login' },
     'Logout': { zh: '退出', en: 'Logout' },
-    'Building beautiful interfaces': { zh: '构建美丽的界面', en: 'Building beautiful interfaces' },
-    'Hi, I': { zh: '你好，我是', en: 'Hi, I' },
-    'm': { zh: '', en: 'm' },
-    'Frontend Developer': { zh: '前端开发者', en: 'Frontend Developer' },
-    'Passionate about creating exceptional digital experiences with modern web technologies.': { zh: '热衷于使用现代Web技术创造卓越的数字体验。', en: 'Passionate about creating exceptional digital experiences with modern web technologies.' },
-    'Years Experience': { zh: '年经验', en: 'Years Experience' },
-    'Projects Completed': { zh: '完成项目', en: 'Projects Completed' },
-    'Clients Served': { zh: '服务客户', en: 'Clients Served' },
-    'Lines of Code': { zh: '代码行数', en: 'Lines of Code' },
-    'View Portfolio': { zh: '查看作品集', en: 'View Portfolio' },
-    'Download Resume': { zh: '下载简历', en: 'Download Resume' },
     'About Me': { zh: '关于我', en: 'About Me' },
     'Who Am I?': { zh: '我是谁？', en: 'Who Am I?' },
-    "I'm a passionate frontend developer with years of experience building beautiful and functional web applications. I specialize in creating user-centered designs that deliver exceptional experiences.": { zh: '我是一名充满热情的前端开发者，拥有多年构建美观且功能强大的Web应用的经验。我专注于创建以用户为中心的设计，提供卓越的体验。', en: "I'm a passionate frontend developer with years of experience building beautiful and functional web applications. I specialize in creating user-centered designs that deliver exceptional experiences." },
-    'My expertise spans from responsive design to complex single-page applications. I believe in writing clean, maintainable code and continuously learning new technologies.': { zh: '我的专长涵盖从响应式设计到复杂的单页应用。我相信编写干净、可维护的代码，并不断学习新技术。', en: 'My expertise spans from responsive design to complex single-page applications. I believe in writing clean, maintainable code and continuously learning new technologies.' },
-    'Goal Oriented': { zh: '目标导向', en: 'Goal Oriented' },
-    'Creative': { zh: '创意', en: 'Creative' },
-    'Problem Solver': { zh: '问题解决者', en: 'Problem Solver' },
-    'Team Player': { zh: '团队合作', en: 'Team Player' },
     'What I Can Do': { zh: '我能做什么', en: 'What I Can Do' },
-    'Frontend': { zh: '前端', en: 'Frontend' },
-    'Backend': { zh: '后端', en: 'Backend' },
-    'Language': { zh: '语言', en: 'Language' },
-    'Styling': { zh: '样式', en: 'Styling' },
-    'Tools': { zh: '工具', en: 'Tools' },
     'My Work': { zh: '我的作品', en: 'My Work' },
-    'E-commerce Platform': { zh: '电商平台', en: 'E-commerce Platform' },
-    'A modern e-commerce solution with real-time inventory management.': { zh: '一个现代化的电商解决方案，支持实时库存管理。', en: 'A modern e-commerce solution with real-time inventory management.' },
-    'Data Visualization Dashboard': { zh: '数据可视化仪表盘', en: 'Data Visualization Dashboard' },
-    'Interactive dashboard for business analytics and reporting.': { zh: '交互式商业分析和报告仪表盘。', en: 'Interactive dashboard for business analytics and reporting.' },
-    'Task Management App': { zh: '任务管理应用', en: 'Task Management App' },
-    'Collaborative task management with team workflows.': { zh: '支持团队工作流程的协作任务管理。', en: 'Collaborative task management with team workflows.' },
-    'View All Projects': { zh: '查看所有项目', en: 'View All Projects' },
     'Get In Touch': { zh: '联系我', en: 'Get In Touch' },
-    'Email': { zh: '邮箱', en: 'Email' },
-    'GitHub': { zh: 'GitHub', en: 'GitHub' },
-    'LinkedIn': { zh: 'LinkedIn', en: 'LinkedIn' },
-    'Twitter': { zh: 'Twitter', en: 'Twitter' },
+    'View Portfolio': { zh: '查看作品集', en: 'View Portfolio' },
+    'Download Resume': { zh: '下载简历', en: 'Download Resume' },
+    'View All Projects': { zh: '查看所有项目', en: 'View All Projects' },
+    'Send Message': { zh: '发送消息', en: 'Send Message' },
     'Your Name': { zh: '你的名字', en: 'Your Name' },
     'Your Email': { zh: '你的邮箱', en: 'Your Email' },
     'Subject': { zh: '主题', en: 'Subject' },
     'Your Message': { zh: '你的消息', en: 'Your Message' },
-    'Send Message': { zh: '发送消息', en: 'Send Message' },
     'All rights reserved.': { zh: '保留所有权利。', en: 'All rights reserved.' },
-    'EN': { zh: 'EN', en: '中文' },
-    '中文': { zh: 'EN', en: '中文' }
+    'Email': { zh: '邮箱', en: 'Email' },
+    'GitHub': { zh: 'GitHub', en: 'GitHub' },
+    'LinkedIn': { zh: 'LinkedIn', en: 'LinkedIn' },
+    'Twitter': { zh: 'Twitter', en: 'Twitter' },
+    "I'm a passionate frontend developer with years of experience building beautiful and functional web applications. I specialize in creating user-centered designs that deliver exceptional experiences.": { 
+      zh: '我是一名充满热情的前端开发者，拥有多年构建美观且功能强大的Web应用的经验。我专注于创建以用户为中心的设计，提供卓越的体验。', 
+      en: "I'm a passionate frontend developer with years of experience building beautiful and functional web applications. I specialize in creating user-centered designs that deliver exceptional experiences." 
+    },
+    'My expertise spans from responsive design to complex single-page applications. I believe in writing clean, maintainable code and continuously learning new technologies.': { 
+      zh: '我的专长涵盖从响应式设计到复杂的单页应用。我相信编写干净、可维护的代码，并不断学习新技术。', 
+      en: 'My expertise spans from responsive design to complex single-page applications. I believe in writing clean, maintainable code and continuously learning new technologies.' 
+    },
+    'Goal Oriented': { zh: '目标导向', en: 'Goal Oriented' },
+    'Creative': { zh: '创意', en: 'Creative' },
+    'Problem Solver': { zh: '问题解决者', en: 'Problem Solver' },
+    'Team Player': { zh: '团队合作', en: 'Team Player' }
   }
-  return translations[key]?.[currentLocale.value] || key
+  return hardcodedTranslations[key]?.[currentLocale.value] || key
 }
 
 // ============================================
@@ -117,63 +102,6 @@ const scrollToModule = (moduleId: string) => {
 }
 
 // ============================================
-// 数据
-// ============================================
-const heroData = ref({
-  name: { zh: '我的名字', en: 'My Name' },
-  title: { zh: '前端开发者', en: 'Frontend Developer' },
-  subtitle: { zh: '构建美丽的界面', en: 'Building beautiful interfaces' },
-  description: { zh: '热衷于使用现代Web技术创造卓越的数字体验。', en: 'Passionate about creating exceptional digital experiences with modern web technologies.' }
-})
-
-const stats = ref([
-  { value: '5+', label: { zh: '年经验', en: 'Years Experience' } },
-  { value: '30+', label: { zh: '完成项目', en: 'Projects Completed' } },
-  { value: '100+', label: { zh: '服务客户', en: 'Clients Served' } },
-  { value: '50K+', label: { zh: '代码行数', en: 'Lines of Code' } }
-])
-
-const skills = ref([
-  { name: 'Vue.js', level: 95, category: { zh: '前端', en: 'Frontend' } },
-  { name: 'React', level: 85, category: { zh: '前端', en: 'Frontend' } },
-  { name: 'TypeScript', level: 90, category: { zh: '语言', en: 'Language' } },
-  { name: 'Node.js', level: 80, category: { zh: '后端', en: 'Backend' } },
-  { name: 'Tailwind CSS', level: 95, category: { zh: '样式', en: 'Styling' } },
-  { name: 'Git', level: 85, category: { zh: '工具', en: 'Tools' } }
-])
-
-const projects = ref([
-  {
-    id: 1,
-    title: { zh: '电商平台', en: 'E-commerce Platform' },
-    description: { zh: '一个现代化的电商解决方案，支持实时库存管理。', en: 'A modern e-commerce solution with real-time inventory management.' },
-    tags: ['Vue3', 'Node.js', 'MongoDB'],
-    image: 'https://via.placeholder.com/300x200'
-  },
-  {
-    id: 2,
-    title: { zh: '数据可视化仪表盘', en: 'Data Visualization Dashboard' },
-    description: { zh: '交互式商业分析和报告仪表盘。', en: 'Interactive dashboard for business analytics and reporting.' },
-    tags: ['React', 'D3.js', 'PostgreSQL'],
-    image: 'https://via.placeholder.com/300x200'
-  },
-  {
-    id: 3,
-    title: { zh: '任务管理应用', en: 'Task Management App' },
-    description: { zh: '支持团队工作流程的协作任务管理。', en: 'Collaborative task management with team workflows.' },
-    tags: ['Vue3', 'TypeScript', 'Firebase'],
-    image: 'https://via.placeholder.com/300x200'
-  }
-])
-
-const contactInfo = ref({
-  email: 'hello@example.com',
-  github: 'github.com/username',
-  linkedin: 'linkedin.com/in/username',
-  twitter: '@username'
-})
-
-// ============================================
 // 工具函数
 // ============================================
 
@@ -193,6 +121,34 @@ const getCategoryColor = (category: string | { zh: string; en: string }) => {
   }
   return colors[categoryEn] || 'bg-gray-100 text-gray-600'
 }
+
+// ============================================
+// 计算属性
+// ============================================
+
+const displayHeroData = computed(() => {
+  return configStore.heroData
+})
+
+const displayStats = computed(() => {
+  return configStore.stats
+})
+
+const displaySkills = computed(() => {
+  return configStore.modularSkills
+})
+
+const displayProjects = computed(() => {
+  return configStore.projects
+})
+
+const displayContact = computed(() => {
+  return configStore.contactInfo
+})
+
+onMounted(async () => {
+  await configStore.fetchAllConfigs()
+})
 </script>
 
 <template>
@@ -249,31 +205,31 @@ const getCategoryColor = (category: string | { zh: string; en: string }) => {
       <section id="hero" class="min-h-screen flex items-center justify-center px-4 py-16">
         <div class="max-w-3xl mx-auto text-center space-y-8">
           <div class="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-100 to-purple-100 rounded-full">
-            <span class="text-sm font-medium text-blue-600">{{ typeof heroData.subtitle === 'object' ? heroData.subtitle[currentLocale] : heroData.subtitle }}</span>
+            <span class="text-sm font-medium text-blue-600">{{ configStore.getLocalizedText(displayHeroData.subtitle, currentLocale) }}</span>
           </div>
           
           <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold text-neutral-900 leading-tight">
-            {{ currentLocale === 'zh' ? '你好，我是' : "Hi, I'm" }} <span class="bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">{{ typeof heroData.name === 'object' ? heroData.name[currentLocale] : heroData.name }}</span>
+            {{ currentLocale === 'zh' ? '你好，我是' : "Hi, I'm" }} <span class="bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">{{ configStore.getLocalizedText(displayHeroData.name, currentLocale) }}</span>
           </h1>
           
           <p class="text-xl text-neutral-600 max-w-xl mx-auto">
-            {{ typeof heroData.title === 'object' ? heroData.title[currentLocale] : heroData.title }}
+            {{ configStore.getLocalizedText(displayHeroData.title, currentLocale) }}
           </p>
           
           <p class="text-neutral-500 max-w-lg mx-auto">
-            {{ typeof heroData.description === 'object' ? heroData.description[currentLocale] : heroData.description }}
+            {{ configStore.getLocalizedText(displayHeroData.description, currentLocale) }}
           </p>
 
           <div class="flex flex-wrap justify-center gap-8 pt-8">
             <div
-              v-for="stat in stats"
-              :key="typeof stat.label === 'object' ? stat.label.en : stat.label"
+              v-for="stat in displayStats"
+              :key="stat.label.en"
               class="text-center group"
             >
               <div class="text-3xl font-bold text-neutral-800 group-hover:text-blue-500 transition-colors">
                 {{ stat.value }}
               </div>
-              <div class="text-sm text-neutral-500">{{ typeof stat.label === 'object' ? stat.label[currentLocale] : stat.label }}</div>
+              <div class="text-sm text-neutral-500">{{ configStore.getLocalizedText(stat.label, currentLocale) }}</div>
             </div>
           </div>
 
@@ -353,14 +309,14 @@ const getCategoryColor = (category: string | { zh: string; en: string }) => {
 
           <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             <div
-              v-for="skill in skills"
+              v-for="skill in displaySkills"
               :key="skill.name"
               class="p-6 bg-gradient-to-br from-neutral-50 to-white rounded-2xl border border-neutral-100 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300 group"
             >
               <div class="flex items-center justify-between mb-4">
                 <span class="font-medium text-neutral-800">{{ skill.name }}</span>
                 <span :class="['text-xs font-medium px-2 py-1 rounded-full', getCategoryColor(skill.category)]">
-                  {{ typeof skill.category === 'object' ? skill.category[currentLocale] : skill.category }}
+                  {{ configStore.getLocalizedText(skill.category, currentLocale) }}
                 </span>
               </div>
               
@@ -390,15 +346,15 @@ const getCategoryColor = (category: string | { zh: string; en: string }) => {
 
           <div class="space-y-8">
             <div
-              v-for="project in projects"
+              v-for="project in displayProjects"
               :key="project.id"
               class="group bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300"
             >
               <div class="grid md:grid-cols-2">
                 <div class="aspect-video bg-neutral-100 relative overflow-hidden">
                   <img 
-                    :src="project.image" 
-                    :alt="typeof project.title === 'object' ? project.title[currentLocale] : project.title"
+                    :src="project.image || 'https://via.placeholder.com/300x200'" 
+                    :alt="configStore.getLocalizedText(project.title, currentLocale)"
                     class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                   />
                   <div class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
@@ -406,13 +362,13 @@ const getCategoryColor = (category: string | { zh: string; en: string }) => {
                 
                 <div class="p-6 flex flex-col justify-between">
                   <div>
-                    <h3 class="text-xl font-bold text-neutral-900 mb-2">{{ typeof project.title === 'object' ? project.title[currentLocale] : project.title }}</h3>
-                    <p class="text-neutral-600 mb-4">{{ typeof project.description === 'object' ? project.description[currentLocale] : project.description }}</p>
+                    <h3 class="text-xl font-bold text-neutral-900 mb-2">{{ configStore.getLocalizedText(project.title, currentLocale) }}</h3>
+                    <p class="text-neutral-600 mb-4">{{ configStore.getLocalizedText(project.description, currentLocale) }}</p>
                   </div>
                   
                   <div class="flex flex-wrap gap-2">
                     <span
-                      v-for="tag in project.tags"
+                      v-for="tag in project.tags || []"
                       :key="tag"
                       class="px-3 py-1 text-sm bg-neutral-100 text-neutral-600 rounded-full hover:bg-blue-100 hover:text-blue-600 transition-colors"
                     >
@@ -443,18 +399,18 @@ const getCategoryColor = (category: string | { zh: string; en: string }) => {
 
           <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
             <a 
-              href="mailto:{{ contactInfo.email }}"
+              :href="`mailto:${displayContact.email}`"
               class="group p-6 bg-gradient-to-br from-orange-50 to-white rounded-2xl border border-orange-100 hover:border-orange-300 hover:shadow-lg transition-all duration-300 text-center"
             >
               <div class="w-12 h-12 mx-auto mb-4 bg-orange-100 rounded-full flex items-center justify-center group-hover:bg-orange-500 group-hover:scale-110 transition-all duration-300">
                 <span class="text-xl">📧</span>
               </div>
               <div class="font-medium text-neutral-800">{{ t('Email') }}</div>
-              <div class="text-sm text-neutral-500 mt-1">{{ contactInfo.email }}</div>
+              <div class="text-sm text-neutral-500 mt-1">{{ displayContact.email }}</div>
             </a>
 
             <a 
-              :href="`https://${contactInfo.github}`"
+              :href="`https://${displayContact.github}`"
               target="_blank"
               class="group p-6 bg-gradient-to-br from-gray-50 to-white rounded-2xl border border-gray-100 hover:border-gray-300 hover:shadow-lg transition-all duration-300 text-center"
             >
@@ -462,11 +418,11 @@ const getCategoryColor = (category: string | { zh: string; en: string }) => {
                 <span class="text-xl">💻</span>
               </div>
               <div class="font-medium text-neutral-800">{{ t('GitHub') }}</div>
-              <div class="text-sm text-neutral-500 mt-1">{{ contactInfo.github }}</div>
+              <div class="text-sm text-neutral-500 mt-1">{{ displayContact.github }}</div>
             </a>
 
             <a 
-              :href="`https://${contactInfo.linkedin}`"
+              :href="`https://${displayContact.linkedin}`"
               target="_blank"
               class="group p-6 bg-gradient-to-br from-blue-50 to-white rounded-2xl border border-blue-100 hover:border-blue-300 hover:shadow-lg transition-all duration-300 text-center"
             >
@@ -474,11 +430,11 @@ const getCategoryColor = (category: string | { zh: string; en: string }) => {
                 <span class="text-xl">💼</span>
               </div>
               <div class="font-medium text-neutral-800">{{ t('LinkedIn') }}</div>
-              <div class="text-sm text-neutral-500 mt-1">{{ contactInfo.linkedin }}</div>
+              <div class="text-sm text-neutral-500 mt-1">{{ displayContact.linkedin }}</div>
             </a>
 
             <a 
-              :href="`https://twitter.com/${contactInfo.twitter.replace('@', '')}`"
+              :href="`https://twitter.com/${displayContact.twitter.replace('@', '')}`"
               target="_blank"
               class="group p-6 bg-gradient-to-br from-sky-50 to-white rounded-2xl border border-sky-100 hover:border-sky-300 hover:shadow-lg transition-all duration-300 text-center"
             >
@@ -486,7 +442,7 @@ const getCategoryColor = (category: string | { zh: string; en: string }) => {
                 <span class="text-xl">🐦</span>
               </div>
               <div class="font-medium text-neutral-800">{{ t('Twitter') }}</div>
-              <div class="text-sm text-neutral-500 mt-1">{{ contactInfo.twitter }}</div>
+              <div class="text-sm text-neutral-500 mt-1">{{ displayContact.twitter }}</div>
             </a>
           </div>
 
