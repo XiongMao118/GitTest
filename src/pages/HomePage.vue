@@ -795,15 +795,10 @@ const removeProject = (index: number) => {
               <div 
                 v-for="(project, index) in personalInfo.projects" 
                 :key="project.title" 
-                class="project-card group flex gap-4 p-4 -mx-4 rounded-lg transition-all duration-300 hover:bg-neutral-50 hover:shadow-md hover:-translate-y-0.5 stagger-item"
+                class="project-card group p-4 -mx-4 rounded-lg transition-all duration-300 hover:bg-neutral-50 hover:shadow-md stagger-item"
                 :style="{ animationDelay: `${index * 0.1}s` }"
               >
-                <div class="w-20 h-20 rounded-lg bg-gradient-to-br from-neutral-100 to-neutral-200 flex-shrink-0 flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
-                  <svg class="w-8 h-8 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
-                  </svg>
-                </div>
-                <div class="flex-1 space-y-2">
+                <div class="space-y-2">
                   <h3 class="text-lg font-medium text-neutral-800">{{ project.title }}</h3>
                   <p class="text-sm text-neutral-600 leading-relaxed">{{ project.description }}</p>
                 </div>
