@@ -818,6 +818,11 @@ const removeProject = (index: number) => {
           <p class="text-sm text-neutral-400">
             © {{ new Date().getFullYear() }} {{ personalInfo.name }}
           </p>
+          <p class="text-xs text-neutral-300 mt-2">
+            <a href="https://beian.miit.gov.cn/" target="_blank" class="hover:text-neutral-500 transition-colors">
+              京ICP备XXXXXXXX号
+            </a>
+          </p>
         </footer>
       </div>
     </main>

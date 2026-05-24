@@ -533,6 +533,11 @@ const getCategoryColor = (category: string | { zh: string; en: string }) => {
           <p class="text-neutral-400 text-sm">
             © {{ new Date().getFullYear() }} {{ t('All rights reserved.') }}
           </p>
+          <p class="text-neutral-500 text-xs mt-3">
+            <a href="https://beian.miit.gov.cn/" target="_blank" class="hover:text-neutral-300 transition-colors">
+              京ICP备XXXXXXXX号
+            </a>
+          </p>
         </div>
       </footer>
     </main>
