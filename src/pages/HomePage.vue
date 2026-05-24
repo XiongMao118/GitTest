@@ -501,7 +501,7 @@ const removeProject = (index: number) => {
                     type="file"
                     accept="image/*"
                     class="hidden"
-                    @change="handleUserAvatarUpload"
+                    @change="handleAvatarUpload"
                   />
                 </label>
               </div>
